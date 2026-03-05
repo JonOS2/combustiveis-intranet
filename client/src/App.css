@@ -1,0 +1,214 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1rem;
+  text-align: center;
+}
+
+/* Ajuste de padding no mobile */
+@media (max-width: 768px) {
+  #root {
+    padding: 0.5rem;
+  }
+}
+
+.card {
+  padding: 1.5em;
+}
+
+@media (max-width: 768px) {
+  .card {
+    padding: 1rem;
+  }
+}
+
+button {
+  position: relative;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+
+  color: #fff;
+  background: linear-gradient(
+    120deg,
+    #2563eb,
+    #3b82f6,
+    #06b6d4,
+    #2563eb
+  );
+  background-size: 300% 300%;
+
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* 🌈 Hover: gradiente se move */
+button:hover:not(:disabled) {
+  animation: gradientMove 2s ease infinite;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+/* 👇 Clique */
+button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3) inset;
+}
+
+/* 🚫 Desabilitado */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  animation: none;
+}
+
+/* =========================
+   BOTÃO EXPORTAR (VERDE)
+========================= */
+
+/* Hover mantém o gradiente, mas dá destaque */
+button.btn-export:hover {
+  background: linear-gradient(135deg, #003e20, #2ecc71, #1fa463);
+  background-size: 300% 300%;
+  animation: gradientMove 6s ease infinite;
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+
+/* Click */
+button.btn-export:active {
+  transform: scale(0.97);
+}
+
+/* Animação do gradiente */
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+
+/* 🎞️ Keyframes do gradiente */
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* 📱 Mobile: remove hover fake */
+@media (hover: none) {
+  button:hover {
+    animation: none;
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* =========================
+   CARD DE POSTO (ACCORDION)
+========================= */
+
+.posto-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+
+  transition:
+    background 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.15s ease;
+}
+
+.posto-card:hover {
+  background: linear-gradient(120deg, #c4d2de, #c4d2de);
+  color: #000000;
+
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+.posto-card.aberto {
+  background: linear-gradient(135deg, #c4d2de, #c4d2de);
+  color: #000000;
+
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+}
+
+
+
+.posto-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  justify-content: center;
+}
+
+
+.seta {
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.resumo {
+  font-size: 13px;
+  color: #555;
+  margin-top: 4px;
+}
+
+.posto-detalhes {
+  margin-top: 12px;
+  padding-left: 24px;
+  font-size: 14px;
+  opacity: 0.95;
+}
+
+.posto-detalhes p {
+  margin: 4px 0;
+}
+
+
+.posto-detalhes a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.posto-detalhes a:hover {
+  text-decoration: underline;
+}
+
+.aviso {
+  margin-top: 10px;
+  padding: 10px;
+  background: linear-gradient(90deg, #1e3c72, #2a5298);
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .posto-card {
+    padding: 12px;
+  }
+}

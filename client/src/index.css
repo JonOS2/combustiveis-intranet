@@ -1,0 +1,147 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f0f2f5;
+  background-image: radial-gradient(circle, #E02F52 0%, #C4D2DE 30%, #294D80);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start; /* 🔴 importante pro mobile */
+  min-height: 100vh;
+}
+
+@media (max-width: 768px) {
+  body {
+    align-items: flex-start;
+  }
+}
+
+.card {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Card largo (admin) */
+.card.wide {
+  max-width: 768px;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .card {
+    border-radius: 0;
+    min-height: 100vh;
+    max-width: 100%;
+    box-shadow: none;
+    padding: 1rem;
+  }
+
+  .card.wide {
+    max-width: 100%;
+  }
+}
+
+input, textarea, select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+/* Botões no desktop podem ficar lado a lado */
+@media (min-width: 769px) {
+  button.inline {
+    width: auto;
+  }
+}
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  min-width: 800px; /* 🔴 força scroll no mobile */
+}
+
+.table-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.table-controls select {
+  max-width: 250px;
+}
+
+@media (max-width: 768px) {
+  .table-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+
+th, td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+
+th {
+  background-color: #f8f9fa;
+  color: #555;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pagination button {
+  width: auto;
+  padding: 8px 12px;
+}

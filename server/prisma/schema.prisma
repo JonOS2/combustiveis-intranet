@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Municipio {
+  id          Int      @id @default(autoincrement())
+  codigoIBGE  Int      @unique
+  nome        String
+
+  postos      Posto[]
+
+  createdAt   DateTime @default(now())
+}
+
+model Posto {
+  id            Int      @id @default(autoincrement())
+  cnpj          String   @unique
+  razaoSocial   String?
+  nomeFantasia  String?
+  endereco      String?
+  bairro        String?
+  cep           String?
+  latitude      Float?
+  longitude     Float?
+
+  municipioId   Int
+  municipio     Municipio @relation(fields: [municipioId], references: [id])
+
+  precos        Preco[]
+
+  createdAt     DateTime @default(now())
+}
+
+model Combustivel {
+  id          Int     @id @default(autoincrement())
+  codigo      String  @unique
+  descricao   String?
+  unidade     String?
+
+  precos      Preco[]
+
+  createdAt   DateTime @default(now())
+}
+
+model Preco {
+  id              Int       @id @default(autoincrement())
+
+  valorDeclarado  Float?
+  valorVenda      Float
+  dataVenda       DateTime
+
+  postoId         Int
+  combustivelId   Int
+
+  posto           Posto        @relation(fields: [postoId], references: [id])
+  combustivel     Combustivel  @relation(fields: [combustivelId], references: [id])
+
+  createdAt       DateTime @default(now())
+
+  @@index([dataVenda])
+  @@index([postoId, combustivelId])
+}

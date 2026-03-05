@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: combustiveis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: combustiveis
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./server
+    container_name: combustiveis-back
+    env_file:
+      - ./server/.env
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  frontend:
+    build: ./client
+    container_name: combustiveis-front
+    ports:
+      - "92:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const XLSX = require('xlsx');
+const { salvarRegistro } = require('./src/services/sefazIngest.service');
 
 const app = express();
 

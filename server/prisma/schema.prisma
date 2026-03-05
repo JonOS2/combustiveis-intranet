@@ -63,4 +63,5 @@ model Preco {
 
   @@index([dataVenda])
   @@index([postoId, combustivelId])
+  @@unique([postoId, combustivelId, dataVenda])
 }

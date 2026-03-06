@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 
 const combustivelRoutes = require('./src/routes/combustivel.routes');
+const { iniciarJobs } = require('./src/jobs/sync.job');
 
 /* =========================
    VALIDAÇÃO DE AMBIENTE
@@ -46,4 +47,5 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
+  iniciarJobs();
 });

@@ -4,64 +4,89 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
+// =========================
+// MUNICÍPIO
+// =========================
 model Municipio {
-  id          Int      @id @default(autoincrement())
-  codigoIBGE  Int      @unique
-  nome        String
+  id         Int    @id @default(autoincrement())
+  codigoIBGE Int    @unique
+  nome       String
 
-  postos      Posto[]
+  postos    Posto[]
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
+// =========================
+// POSTO
+// =========================
 model Posto {
-  id            Int      @id @default(autoincrement())
-  cnpj          String   @unique
-  razaoSocial   String?
-  nomeFantasia  String?
-  endereco      String?
-  bairro        String?
-  cep           String?
-  latitude      Float?
-  longitude     Float?
+  id           Int     @id @default(autoincrement())
+  cnpj         String  @unique
+  razaoSocial  String?
+  nomeFantasia String?
+  endereco     String?
+  numero       String?
+  bairro       String?
+  cep          String?
+  latitude     Float?
+  longitude    Float?
+  telefone     String?
+  bandeira     String? // cache da ANP — evita chamadas repetidas à API externa
 
-  municipioId   Int
-  municipio     Municipio @relation(fields: [municipioId], references: [id])
+  municipioId Int
+  municipio   Municipio @relation(fields: [municipioId], references: [id])
 
-  precos        Preco[]
+  precos Preco[]
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([municipioId])
+  @@index([bairro])
 }
 
+// =========================
+// COMBUSTÍVEL
+// =========================
 model Combustivel {
-  id          Int     @id @default(autoincrement())
-  codigo      String  @unique
-  descricao   String?
-  unidade     String?
+  id        Int     @id @default(autoincrement())
+  codigo    String  @unique
+  descricao String?
+  unidade   String?
+  tipo      Int? // tipoCombustivel numérico da SEFAZ (1=gasolina, 2=aditivada, etc)
 
-  precos      Preco[]
+  precos Preco[]
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
+// =========================
+// PREÇO
+// =========================
 model Preco {
-  id              Int       @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  valorDeclarado  Float?
-  valorVenda      Float
-  dataVenda       DateTime
+  valorDeclarado Float?
+  valorVenda     Float
+  dataVenda      DateTime @db.Date // só a data, sem horário
 
-  postoId         Int
-  combustivelId   Int
+  postoId       Int
+  combustivelId Int
 
-  posto           Posto        @relation(fields: [postoId], references: [id])
-  combustivel     Combustivel  @relation(fields: [combustivelId], references: [id])
+  posto       Posto       @relation(fields: [postoId], references: [id])
+  combustivel Combustivel @relation(fields: [combustivelId], references: [id])
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@unique([postoId, combustivelId, dataVenda])
   @@index([dataVenda])
   @@index([postoId, combustivelId])
-  @@unique([postoId, combustivelId, dataVenda])
+  @@index([combustivelId, dataVenda]) // útil para buscas por tipo + período
 }

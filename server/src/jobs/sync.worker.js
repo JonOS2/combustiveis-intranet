@@ -1,12 +1,6 @@
-const {
-  buscarPagina,
-  buscarBandeiraPorCNPJ,
-} = require('../services/sefaz.service');
+const { buscarPagina, buscarBandeiraPorCNPJ } = require('../services/sefaz.service');
 const { salvarRegistro } = require('../services/sefazIngest.service');
 
-/* =========================
-   MUNICÍPIOS DE ALAGOAS
-========================= */
 const MUNICIPIOS = [
   2700102, 2700201, 2700300, 2700409, 2700508, 2700607, 2700706, 2700805,
   2700904, 2701001, 2701100, 2701209, 2701308, 2701357, 2701407, 2701506,
@@ -25,18 +19,12 @@ const MUNICIPIOS = [
 
 const TIPOS_COMBUSTIVEL = [1, 2, 3, 4, 5, 6];
 
-/* =========================
-   BUSCA TODAS AS PÁGINAS
-========================= */
+// 🔒 Lock para evitar syncs simultâneos
+let syncEmAndamento = false;
+
 const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, dias = 1 }) => {
   const registrosPorPagina = 100;
-  const primeira = await buscarPagina({
-    tipoCombustivel,
-    dias,
-    codigoIBGE,
-    pagina: 1,
-    registrosPorPagina,
-  });
+  const primeira = await buscarPagina({ tipoCombustivel, dias, codigoIBGE, pagina: 1, registrosPorPagina });
 
   const conteudo = primeira.conteudo || [];
   const totalPaginas =
@@ -47,9 +35,7 @@ const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, dias = 1 }) => 
   if (totalPaginas > 1) {
     const paginas = Array.from({ length: totalPaginas - 1 }, (_, i) => i + 2);
     const resultados = await Promise.all(
-      paginas.map((p) =>
-        buscarPagina({ tipoCombustivel, dias, codigoIBGE, pagina: p, registrosPorPagina })
-      )
+      paginas.map((p) => buscarPagina({ tipoCombustivel, dias, codigoIBGE, pagina: p, registrosPorPagina }))
     );
     resultados.forEach((r) => conteudo.push(...(r.conteudo || [])));
   }
@@ -57,10 +43,13 @@ const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, dias = 1 }) => 
   return conteudo;
 };
 
-/* =========================
-   SINCRONIZAÇÃO PRINCIPAL
-========================= */
 const sincronizar = async () => {
+  if (syncEmAndamento) {
+    console.log('⏭  [SYNC] Já em andamento — ignorando disparo.');
+    return;
+  }
+
+  syncEmAndamento = true;
   const inicio = Date.now();
   console.log(`🔄 [SYNC] Iniciando — ${new Date().toLocaleString('pt-BR')}`);
 
@@ -68,43 +57,42 @@ const sincronizar = async () => {
   let totalErros = 0;
   let municipioAtual = 0;
 
-  for (const codigoIBGE of MUNICIPIOS) {
-    municipioAtual++;
-    console.log(`📍 [SYNC] Município ${municipioAtual}/${MUNICIPIOS.length} — IBGE ${codigoIBGE}`);
+  try {
+    for (const codigoIBGE of MUNICIPIOS) {
+      municipioAtual++;
+      console.log(`📍 [SYNC] Município ${municipioAtual}/${MUNICIPIOS.length} — IBGE ${codigoIBGE}`);
 
-    for (const tipo of TIPOS_COMBUSTIVEL) {
-      try {
-        const registros = await buscarTodasPaginas({
-          tipoCombustivel: tipo,
-          codigoIBGE,
-          dias: 1,
-        });
+      for (const tipo of TIPOS_COMBUSTIVEL) {
+        try {
+          const registros = await buscarTodasPaginas({ tipoCombustivel: tipo, codigoIBGE, dias: 1 });
 
-        if (registros.length === 0) continue;
+          if (registros.length === 0) continue;
 
-        console.log(`   ⛽ Tipo ${tipo}: ${registros.length} registros encontrados`);
+          console.log(`   ⛽ Tipo ${tipo}: ${registros.length} registros encontrados`);
 
-        for (const item of registros) {
-          try {
-            // Busca bandeira com timeout curto — não trava o sync se ANP falhar
-            const cnpj = item?.estabelecimento?.cnpj;
-            item.estabelecimento.bandeira = await Promise.race([
-              buscarBandeiraPorCNPJ(cnpj),
-              new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
-            ]);
+          for (const item of registros) {
+            try {
+              const cnpj = item?.estabelecimento?.cnpj;
+              item.estabelecimento.bandeira = await Promise.race([
+                buscarBandeiraPorCNPJ(cnpj),
+                new Promise((resolve) => setTimeout(() => resolve(null), 8000)),
+              ]);
 
-            await salvarRegistro(item, tipo);
-            totalSalvos++;
-          } catch (err) {
-            console.error(`   ❌ Erro ao salvar CNPJ ${item?.estabelecimento?.cnpj}:`, err.message);
-            totalErros++;
+              await salvarRegistro(item, tipo);
+              totalSalvos++;
+            } catch (err) {
+              console.error(`   ❌ Erro ao salvar CNPJ ${item?.estabelecimento?.cnpj}:`, err.message);
+              totalErros++;
+            }
           }
+        } catch (err) {
+          console.error(`   ❌ Erro IBGE ${codigoIBGE} tipo ${tipo}:`, err.message);
+          totalErros++;
         }
-      } catch (err) {
-        console.error(`   ❌ Erro IBGE ${codigoIBGE} tipo ${tipo}:`, err.message);
-        totalErros++;
       }
     }
+  } finally {
+    syncEmAndamento = false;
   }
 
   const duracao = ((Date.now() - inicio) / 1000 / 60).toFixed(1);

@@ -39,15 +39,7 @@ const buscarPagina = async ({
 ========================= */
 const ehAditivado = (descricao = '') => {
   const texto = descricao.toUpperCase();
-
-  const palavrasAditivado = [
-    'ADIT',
-    'GRID',
-    'ADITIVAD',
-    'SHELL EVOLUX',
-    'ADITIVADO'
-  ];
-
+  const palavrasAditivado = ['ADIT', 'GRID', 'ADITIVAD', 'SHELL EVOLUX', 'ADITIVADO'];
   return palavrasAditivado.some(palavra => texto.includes(palavra));
 };
 
@@ -68,27 +60,32 @@ const cacheBandeiras = {};
 
 const buscarBandeiraPorCNPJ = async (cnpj) => {
   if (!cnpj) return null;
-  if (cacheBandeiras[cnpj]) return cacheBandeiras[cnpj];
+  if (cacheBandeiras[cnpj] !== undefined) return cacheBandeiras[cnpj];
 
   try {
     const res = await axios.get(
       `https://revendedoresapi.anp.gov.br/v1/combustivel?cnpj=${cnpj}`,
-      { timeout: 5000 }
+      {
+        timeout: 8000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; CombustiveisIntranet/1.0)',
+          'Accept': 'application/json',
+        }
+      }
     );
 
     const bandeira = res.data?.data?.[0]?.distribuidora || null;
     cacheBandeiras[cnpj] = bandeira;
-
     return bandeira;
   } catch (error) {
     console.error(`❌ Erro ANP (${cnpj}):`, error.message);
+    cacheBandeiras[cnpj] = null; // cacheia null para não tentar de novo no mesmo sync
     return null;
   }
 };
 
 /* =========================
    ENRIQUECE LISTA COM BANDEIRAS
-   (util compartilhado entre a rota principal e a de Excel)
 ========================= */
 const enriquecerComBandeiras = async (registros) => {
   await Promise.all(
@@ -108,9 +105,8 @@ const filtrarPorTipo = (registros, tipoCombustivel) => {
   return registros.filter((item) => {
     const descricao = item?.produto?.descricao;
     const aditivado = ehAditivado(descricao);
-
-    if (tipoCombustivel === 7) return aditivado;   // só aditivado
-    if (tipoCombustivel === 5) return !aditivado;  // só comum
+    if (tipoCombustivel === 7) return aditivado;
+    if (tipoCombustivel === 5) return !aditivado;
     return true;
   });
 };
@@ -123,11 +119,9 @@ const ordenarRegistros = (registros, ordenarPor) => {
     const valorA = ordenarPor === 'venda'
       ? a.produto.venda.valorVenda
       : a.produto.venda.valorDeclarado;
-
     const valorB = ordenarPor === 'venda'
       ? b.produto.venda.valorVenda
       : b.produto.venda.valorDeclarado;
-
     return valorA - valorB;
   });
 };

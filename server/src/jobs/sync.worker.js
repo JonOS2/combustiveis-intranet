@@ -1,13 +1,11 @@
 const {
   buscarPagina,
   buscarBandeiraPorCNPJ,
-  ehAditivado,
 } = require('../services/sefaz.service');
 const { salvarRegistro } = require('../services/sefazIngest.service');
 
 /* =========================
    MUNICÍPIOS DE ALAGOAS
-   (todos os códigos IBGE)
 ========================= */
 const MUNICIPIOS = [
   2700102, 2700201, 2700300, 2700409, 2700508, 2700607, 2700706, 2700805,
@@ -25,15 +23,10 @@ const MUNICIPIOS = [
   2709004, 2709103, 2709152, 2709202, 2709301, 2709400,
 ];
 
-/* =========================
-   TIPOS DE COMBUSTÍVEL
-   Tipo 7 (S10 aditivado) é filtrado via ehAditivado()
-   a partir do tipo 5, então buscamos 1-6 na SEFAZ
-========================= */
 const TIPOS_COMBUSTIVEL = [1, 2, 3, 4, 5, 6];
 
 /* =========================
-   BUSCA TODAS AS PÁGINAS DE UM MUNICÍPIO + TIPO
+   BUSCA TODAS AS PÁGINAS
 ========================= */
 const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, dias = 1 }) => {
   const registrosPorPagina = 100;
@@ -51,7 +44,6 @@ const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, dias = 1 }) => 
     Math.ceil((primeira.paginacao?.totalRegistros || 0) / registrosPorPagina) ||
     1;
 
-  // Busca páginas restantes em paralelo
   if (totalPaginas > 1) {
     const paginas = Array.from({ length: totalPaginas - 1 }, (_, i) => i + 2);
     const resultados = await Promise.all(
@@ -70,12 +62,16 @@ const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, dias = 1 }) => 
 ========================= */
 const sincronizar = async () => {
   const inicio = Date.now();
-  console.log(`🔄 [SYNC] Iniciando sincronização — ${new Date().toLocaleString('pt-BR')}`);
+  console.log(`🔄 [SYNC] Iniciando — ${new Date().toLocaleString('pt-BR')}`);
 
   let totalSalvos = 0;
   let totalErros = 0;
+  let municipioAtual = 0;
 
   for (const codigoIBGE of MUNICIPIOS) {
+    municipioAtual++;
+    console.log(`📍 [SYNC] Município ${municipioAtual}/${MUNICIPIOS.length} — IBGE ${codigoIBGE}`);
+
     for (const tipo of TIPOS_COMBUSTIVEL) {
       try {
         const registros = await buscarTodasPaginas({
@@ -84,23 +80,28 @@ const sincronizar = async () => {
           dias: 1,
         });
 
+        if (registros.length === 0) continue;
+
+        console.log(`   ⛽ Tipo ${tipo}: ${registros.length} registros encontrados`);
+
         for (const item of registros) {
           try {
-            // Busca bandeira antes de salvar
+            // Busca bandeira com timeout curto — não trava o sync se ANP falhar
             const cnpj = item?.estabelecimento?.cnpj;
-            item.estabelecimento.bandeira = await buscarBandeiraPorCNPJ(cnpj);
+            item.estabelecimento.bandeira = await Promise.race([
+              buscarBandeiraPorCNPJ(cnpj),
+              new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
+            ]);
 
-            // Salva no banco via upsert (não duplica)
-            await salvarRegistro(item);
+            await salvarRegistro(item, tipo);
             totalSalvos++;
           } catch (err) {
-            console.error(`❌ [SYNC] Erro ao salvar registro CNPJ ${item?.estabelecimento?.cnpj}:`, err.message);
+            console.error(`   ❌ Erro ao salvar CNPJ ${item?.estabelecimento?.cnpj}:`, err.message);
             totalErros++;
           }
         }
       } catch (err) {
-        // Se um município/tipo falhar, continua os demais
-        console.error(`❌ [SYNC] Erro IBGE ${codigoIBGE} tipo ${tipo}:`, err.message);
+        console.error(`   ❌ Erro IBGE ${codigoIBGE} tipo ${tipo}:`, err.message);
         totalErros++;
       }
     }

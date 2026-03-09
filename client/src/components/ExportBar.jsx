@@ -63,7 +63,7 @@ export default function ExportBar({ filtros, pagina }) {
 
   return (
     <>
-      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center" }}>
         <Button
           variant="outlined"
           color="success"

@@ -1,6 +1,6 @@
 const prisma = require('../database/prisma');
 
-async function salvarRegistro(item) {
+async function salvarRegistro(item, tipoCombustivel) {
   const produto = item.produto;
   const estabelecimento = item.estabelecimento;
   const endereco = estabelecimento.endereco;
@@ -15,7 +15,7 @@ async function salvarRegistro(item) {
     }
   });
 
-  // 2️⃣ Posto — agora inclui numero, telefone e bandeira
+  // 2️⃣ Posto
   const posto = await prisma.posto.upsert({
     where: { cnpj: estabelecimento.cnpj },
     update: {
@@ -28,7 +28,6 @@ async function salvarRegistro(item) {
       latitude:     endereco.latitude,
       longitude:    endereco.longitude,
       telefone:     estabelecimento.telefone || null,
-      // Só atualiza bandeira se veio um valor — preserva o que já está no banco
       ...(estabelecimento.bandeira && { bandeira: estabelecimento.bandeira }),
       municipioId:  municipio.id
     },
@@ -48,23 +47,23 @@ async function salvarRegistro(item) {
     }
   });
 
-  // 3️⃣ Combustível — agora inclui o tipo numérico da SEFAZ
+  // 3️⃣ Combustível — tipo vem como parâmetro pois a SEFAZ não o retorna no resultado
   const combustivel = await prisma.combustivel.upsert({
     where: { codigo: produto.codigo },
     update: {
       descricao: produto.descricao,
       unidade:   produto.unidadeMedida,
-      tipo:      produto.tipoCombustivel ?? null
+      ...(tipoCombustivel != null && { tipo: tipoCombustivel }),
     },
     create: {
       codigo:    produto.codigo,
       descricao: produto.descricao,
       unidade:   produto.unidadeMedida,
-      tipo:      produto.tipoCombustivel ?? null
+      tipo:      tipoCombustivel ?? null,
     }
   });
 
-  // 4️⃣ Preço — upsert para evitar duplicidade
+  // 4️⃣ Preço
   await prisma.preco.upsert({
     where: {
       postoId_combustivelId_dataVenda: {

@@ -1,4 +1,4 @@
-const { buscarPagina, buscarBandeiraPorCNPJ } = require('../services/sefaz.service');
+const { buscarPagina } = require('../services/sefaz.service');
 const { salvarRegistro } = require('../services/sefazIngest.service');
 
 const MUNICIPIOS = [
@@ -72,12 +72,8 @@ const sincronizar = async () => {
 
           for (const item of registros) {
             try {
-              const cnpj = item?.estabelecimento?.cnpj;
-              item.estabelecimento.bandeira = await Promise.race([
-                buscarBandeiraPorCNPJ(cnpj),
-                new Promise((resolve) => setTimeout(() => resolve(null), 8000)),
-              ]);
-
+              // ANP bloqueada dentro do Docker — bandeira populada via script de backfill externo
+              item.estabelecimento.bandeira = null;
               await salvarRegistro(item, tipo);
               totalSalvos++;
             } catch (err) {

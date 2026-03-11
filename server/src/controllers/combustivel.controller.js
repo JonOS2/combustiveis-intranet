@@ -12,8 +12,6 @@ const { sincronizar } = require('../jobs/sync.worker');
 /* =========================
    HELPERS
 ========================= */
-
-// Converte registro do banco para o formato que o frontend espera
 const formatarRegistroDoBanco = (preco) => ({
   produto: {
     codigo: preco.combustivel.codigo,
@@ -70,21 +68,7 @@ const getCombustiveis = async (req, res) => {
       posto: { municipio: { codigoIBGE } },
     };
 
-    const [precos, total] = await Promise.all([
-      prisma.preco.findMany({
-        where,
-        include: {
-          posto: { include: { municipio: true } },
-          combustivel: true,
-        },
-        orderBy: {
-          [ordenarPor === 'venda' ? 'valorVenda' : 'valorDeclarado']: 'asc',
-        },
-        skip: (pagina - 1) * registrosPorPagina,
-        take: registrosPorPagina,
-      }),
-      prisma.preco.count({ where }),
-    ]);
+    const total = await prisma.preco.count({ where });
 
     // Fallback para API SEFAZ se banco vazio
     if (total === 0) {
@@ -107,14 +91,43 @@ const getCombustiveis = async (req, res) => {
       return res.json({ ...data, fonte: 'sefaz' });
     }
 
-    let conteudo = precos.map(formatarRegistroDoBanco);
+    // Busca apenas o preço mais recente por posto+combustível
+    // Agrupa por postoId, pega o de maior dataVenda
+    const precosRaw = await prisma.preco.findMany({
+      where,
+      include: {
+        posto: { include: { municipio: true } },
+        combustivel: true,
+      },
+      orderBy: { dataVenda: 'desc' },
+    });
+
+    // Deduplica — mantém apenas o registro mais recente por posto
+    const vistos = new Set();
+    const precosMaisRecentes = precosRaw.filter((p) => {
+      const chave = `${p.postoId}-${p.combustivelId}`;
+      if (vistos.has(chave)) return false;
+      vistos.add(chave);
+      return true;
+    });
+
+    // Ordena pelo valor escolhido
+    const campo = ordenarPor === 'venda' ? 'valorVenda' : 'valorDeclarado';
+    precosMaisRecentes.sort((a, b) => (a[campo] ?? 0) - (b[campo] ?? 0));
+
+    // Paginação manual após deduplicação
+    const totalDeduplicado = precosMaisRecentes.length;
+    const inicio = (pagina - 1) * registrosPorPagina;
+    const paginados = precosMaisRecentes.slice(inicio, inicio + registrosPorPagina);
+
+    let conteudo = paginados.map(formatarRegistroDoBanco);
     conteudo = filtrarPorTipo(conteudo, tipoCombustivel);
 
     res.json({
       conteudo,
       pagina,
-      totalPaginas: Math.ceil(total / registrosPorPagina),
-      totalRegistros: total,
+      totalPaginas: Math.ceil(totalDeduplicado / registrosPorPagina),
+      totalRegistros: totalDeduplicado,
       fonte: 'banco',
     });
 

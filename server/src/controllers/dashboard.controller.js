@@ -1,8 +1,5 @@
 const prisma = require('../database/prisma');
 
-/* =========================
-   HELPER — data X dias atrás
-========================= */
 const diasAtras = (n) => {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -10,10 +7,6 @@ const diasAtras = (n) => {
   return d;
 };
 
-/* =========================
-   DASHBOARD PRINCIPAL
-   GET /api/dashboard?tipoCombustivel=1&codigoIBGE=2704302
-========================= */
 const getDashboard = async (req, res) => {
   try {
     const tipoCombustivel = parseInt(req.query.tipoCombustivel) || 1;
@@ -25,16 +18,13 @@ const getDashboard = async (req, res) => {
       posto: { municipio: { codigoIBGE } },
     });
 
-    // Busca paralela de todos os dados necessários
-    const [precosHoje, precos30dias, precosPorBandeira] = await Promise.all([
-      // Preços do dia mais recente disponível
+    const [precosHoje, precos30dias, precosPorBandeira, precosPorMunicipio, precosPorBairro] = await Promise.all([
       prisma.preco.findMany({
         where: where(1),
         include: { posto: { include: { municipio: true } }, combustivel: true },
         orderBy: { valorDeclarado: 'asc' },
       }),
 
-      // Histórico 30 dias para gráfico de linha
       prisma.preco.groupBy({
         by: ['dataVenda'],
         where: where(30),
@@ -45,12 +35,9 @@ const getDashboard = async (req, res) => {
         orderBy: { dataVenda: 'asc' },
       }),
 
-      // Preços por bandeira para gráfico de barras
+      // Média por bandeira
       prisma.$queryRaw`
-        SELECT 
-          po.bandeira,
-          AVG(pr."valorDeclarado") as media,
-          COUNT(pr.id) as total
+        SELECT po.bandeira, AVG(pr."valorDeclarado") as media, COUNT(pr.id) as total
         FROM "Preco" pr
         JOIN "Posto" po ON po.id = pr."postoId"
         JOIN "Municipio" m ON m.id = po."municipioId"
@@ -62,9 +49,39 @@ const getDashboard = async (req, res) => {
         GROUP BY po.bandeira
         ORDER BY media ASC
       `,
+
+      // Média por município (top 10 — estado inteiro)
+      prisma.$queryRaw`
+        SELECT m.nome as municipio, AVG(pr."valorDeclarado") as media, COUNT(DISTINCT po.id) as postos
+        FROM "Preco" pr
+        JOIN "Posto" po ON po.id = pr."postoId"
+        JOIN "Municipio" m ON m.id = po."municipioId"
+        JOIN "Combustivel" c ON c.id = pr."combustivelId"
+        WHERE pr."dataVenda" >= ${diasAtras(7)}
+          AND c.tipo = ${tipoCombustivel}
+        GROUP BY m.nome
+        HAVING COUNT(DISTINCT po.id) >= 2
+        ORDER BY media ASC
+        LIMIT 10
+      `,
+
+      // Concentração por bairro no município selecionado
+      prisma.$queryRaw`
+        SELECT po.bairro, COUNT(DISTINCT po.id) as postos, AVG(pr."valorDeclarado") as media
+        FROM "Preco" pr
+        JOIN "Posto" po ON po.id = pr."postoId"
+        JOIN "Municipio" m ON m.id = po."municipioId"
+        JOIN "Combustivel" c ON c.id = pr."combustivelId"
+        WHERE pr."dataVenda" >= ${diasAtras(7)}
+          AND c.tipo = ${tipoCombustivel}
+          AND m."codigoIBGE" = ${codigoIBGE}
+          AND po.bairro IS NOT NULL
+        GROUP BY po.bairro
+        ORDER BY postos DESC
+        LIMIT 12
+      `,
     ]);
 
-    // Se não tem dados hoje, busca últimos 7 dias
     let precosBase = precosHoje;
     if (precosBase.length === 0) {
       precosBase = await prisma.preco.findMany({
@@ -74,7 +91,6 @@ const getDashboard = async (req, res) => {
       });
     }
 
-    // Deduplica — apenas o mais recente por posto
     const vistos = new Set();
     const precosDeduplicated = precosBase
       .sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda))
@@ -85,13 +101,11 @@ const getDashboard = async (req, res) => {
       })
       .sort((a, b) => (a.valorDeclarado ?? 0) - (b.valorDeclarado ?? 0));
 
-    // Métricas gerais
     const valores = precosDeduplicated.map(p => p.valorDeclarado ?? p.valorVenda).filter(Boolean);
     const mediaAtual = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : 0;
     const menorPreco = valores[0] || 0;
     const maiorPreco = valores[valores.length - 1] || 0;
 
-    // Média da semana anterior para comparação
     const precosSemanaAnterior = await prisma.preco.findMany({
       where: {
         dataVenda: { gte: diasAtras(14), lt: diasAtras(7) },
@@ -109,7 +123,6 @@ const getDashboard = async (req, res) => {
       ? ((mediaAtual - mediaSemanaAnterior) / mediaSemanaAnterior) * 100
       : null;
 
-    // Top 10 menores preços
     const top10 = precosDeduplicated.slice(0, 10).map(p => ({
       posto: p.posto.nomeFantasia || p.posto.razaoSocial || p.posto.cnpj,
       bairro: p.posto.bairro,
@@ -119,7 +132,6 @@ const getDashboard = async (req, res) => {
       dataVenda: p.dataVenda,
     }));
 
-    // Histograma de distribuição de preços
     const faixas = {};
     valores.forEach(v => {
       const faixa = (Math.floor(v * 10) / 10).toFixed(1);
@@ -129,7 +141,6 @@ const getDashboard = async (req, res) => {
       .map(([faixa, count]) => ({ faixa: `R$ ${faixa}`, count }))
       .sort((a, b) => parseFloat(a.faixa.replace('R$ ', '')) - parseFloat(b.faixa.replace('R$ ', '')));
 
-    // Postos acima da média
     const postosAcimaMedia = valores.filter(v => v > mediaAtual).length;
     const percentualAcimaMedia = valores.length ? (postosAcimaMedia / valores.length) * 100 : 0;
 
@@ -156,6 +167,16 @@ const getDashboard = async (req, res) => {
         bandeira: b.bandeira || 'Sem bandeira',
         media: parseFloat(parseFloat(b.media).toFixed(3)),
         total: parseInt(b.total),
+      })),
+      porMunicipio: precosPorMunicipio.map(m => ({
+        municipio: m.municipio,
+        media: parseFloat(parseFloat(m.media).toFixed(3)),
+        postos: parseInt(m.postos),
+      })),
+      porBairro: precosPorBairro.map(b => ({
+        bairro: b.bairro,
+        postos: parseInt(b.postos),
+        media: parseFloat(parseFloat(b.media).toFixed(3)),
       })),
       histograma,
     });

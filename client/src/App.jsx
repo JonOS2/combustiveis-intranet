@@ -13,6 +13,7 @@ import { FILTROS_INICIAIS } from "./constants/combustiveis";
 import FiltrosBar from "./components/FiltrosBar";
 import ExportBar from "./components/ExportBar";
 import ListaPostos from "./components/ListaPostos";
+import StatusModal from "./components/StatusModal";
 
 /* =========================
    UTIL
@@ -121,6 +122,9 @@ export default function App() {
         <Typography variant="h5" fontWeight={700}>
           Pesquisa de Combustíveis – AL
         </Typography>
+        <Box sx={{ ml: "auto" }}>
+          <StatusModal />
+        </Box>
       </Box>
 
       {/* FILTROS */}

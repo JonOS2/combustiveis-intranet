@@ -70,7 +70,6 @@ const getCombustiveis = async (req, res) => {
 
     const total = await prisma.preco.count({ where });
 
-    // Fallback para API SEFAZ se banco vazio
     if (total === 0) {
       console.warn(`⚠️  Banco vazio para IBGE ${codigoIBGE} tipo ${tipoCombustivel} — usando API SEFAZ`);
 
@@ -91,8 +90,6 @@ const getCombustiveis = async (req, res) => {
       return res.json({ ...data, fonte: 'sefaz' });
     }
 
-    // Busca apenas o preço mais recente por posto+combustível
-    // Agrupa por postoId, pega o de maior dataVenda
     const precosRaw = await prisma.preco.findMany({
       where,
       include: {
@@ -102,7 +99,6 @@ const getCombustiveis = async (req, res) => {
       orderBy: { dataVenda: 'desc' },
     });
 
-    // Deduplica — mantém apenas o registro mais recente por posto
     const vistos = new Set();
     const precosMaisRecentes = precosRaw.filter((p) => {
       const chave = `${p.postoId}-${p.combustivelId}`;
@@ -111,11 +107,9 @@ const getCombustiveis = async (req, res) => {
       return true;
     });
 
-    // Ordena pelo valor escolhido
     const campo = ordenarPor === 'venda' ? 'valorVenda' : 'valorDeclarado';
     precosMaisRecentes.sort((a, b) => (a[campo] ?? 0) - (b[campo] ?? 0));
 
-    // Paginação manual após deduplicação
     const totalDeduplicado = precosMaisRecentes.length;
     const inicio = (pagina - 1) * registrosPorPagina;
     const paginados = precosMaisRecentes.slice(inicio, inicio + registrosPorPagina);
@@ -146,18 +140,13 @@ const exportarExcel = async (req, res) => {
     const { buffer, nomeArquivo } = await gerarExcel(req.body);
 
     res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
-
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
 
   } catch (error) {
     if (error.message === 'EXPORTACAO_MUITO_GRANDE') {
       return res.status(400).json({ error: 'Exportação muito grande. Refine os filtros.' });
     }
-    // No bloco catch do exportarExcel:
     if (error.message === 'SEM_DADOS') {
       return res.status(404).json({ error: 'Nenhum dado encontrado para os filtros selecionados.' });
     }
@@ -182,4 +171,41 @@ const syncManual = async (req, res) => {
   }
 };
 
-module.exports = { getCombustiveis, exportarExcel, syncManual };
+/* =========================
+   STATUS DO SISTEMA
+   GET /api/combustivel/status
+========================= */
+const getStatus = async (req, res) => {
+  try {
+    const [
+      totalPostos,
+      totalPrecos,
+      totalMunicipios,
+      ultimoPreco,
+      postosSemBandeira,
+    ] = await Promise.all([
+      prisma.posto.count(),
+      prisma.preco.count(),
+      prisma.municipio.count(),
+      prisma.preco.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true, dataVenda: true },
+      }),
+      prisma.posto.count({ where: { bandeira: null } }),
+    ]);
+
+    res.json({
+      ultimaSincronizacao: ultimoPreco?.createdAt || null,
+      ultimaDataVenda: ultimoPreco?.dataVenda || null,
+      totalPostos,
+      totalPrecos,
+      totalMunicipios,
+      postosSemBandeira,
+    });
+  } catch (error) {
+    console.error('❌ Erro getStatus:', error.message);
+    res.status(500).json({ error: 'Erro ao buscar status' });
+  }
+};
+
+module.exports = { getCombustiveis, exportarExcel, syncManual, getStatus };

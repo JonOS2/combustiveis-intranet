@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Box, Grid, Typography, Paper, Select, MenuItem,
-  FormControl, InputLabel, CircularProgress, Alert,
-  Chip,
+  FormControl, InputLabel, CircularProgress, Alert, Chip,
 } from "@mui/material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
@@ -24,9 +23,6 @@ const fmtPct = (v) =>
 
 const CORES = ["#294D80", "#E02F52", "#4CAF50", "#FF9800", "#9C27B0", "#00BCD4", "#C4D2DE"];
 
-/* =========================
-   CARD DE MÉTRICA
-========================= */
 function MetricCard({ titulo, valor, subtitulo, tendencia, chip }) {
   const icone =
     tendencia > 0 ? <TrendingUpIcon fontSize="small" sx={{ color: "error.main" }} />
@@ -52,9 +48,6 @@ function MetricCard({ titulo, valor, subtitulo, tendencia, chip }) {
   );
 }
 
-/* =========================
-   TOOLTIP CUSTOMIZADO
-========================= */
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
@@ -69,26 +62,6 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-/* =========================
-   WRAPPER DE GRÁFICO
-========================= */
-function GraficoCard({ titulo, subtitulo, height = 280, children }) {
-  return (
-    <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, height: "100%" }}>
-      <Typography variant="subtitle1" fontWeight={700}>{titulo}</Typography>
-      {subtitulo && <Typography variant="caption" color="text.secondary">{subtitulo}</Typography>}
-      <Box sx={{ mt: subtitulo ? 1 : 0.5 }}>
-        <ResponsiveContainer width="100%" height={height}>
-          {children}
-        </ResponsiveContainer>
-      </Box>
-    </Paper>
-  );
-}
-
-/* =========================
-   DASHBOARD
-========================= */
 export default function Dashboard() {
   const [tipoCombustivel, setTipoCombustivel] = useState(1);
   const [codigoIBGE, setCodigoIBGE] = useState(2704302);
@@ -125,12 +98,11 @@ export default function Dashboard() {
             ))}
           </Select>
         </FormControl>
-
         <FormControl size="small" sx={{ minWidth: 200 }}>
           <InputLabel>Município</InputLabel>
           <Select value={codigoIBGE} label="Município" onChange={(e) => setCodigoIBGE(Number(e.target.value))}>
-            {MUNICIPIOS.map((m) => (
-              <MenuItem key={m.ibge} value={m.ibge}>{m.nome}</MenuItem>
+            {MUNICIPIOS.map((mun) => (
+              <MenuItem key={mun.ibge} value={mun.ibge}>{mun.nome}</MenuItem>
             ))}
           </Select>
         </FormControl>
@@ -141,38 +113,33 @@ export default function Dashboard() {
           <CircularProgress />
         </Box>
       )}
-
       {erro && <Alert severity="error">{erro}</Alert>}
 
       {!loading && dados && (
         <>
-          {/* CARDS DE MÉTRICAS */}
+          {/* CARDS */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={6} sm={3}>
-              <MetricCard titulo="Menor Preço" valor={fmt(m.menorPreco)} subtitulo="preço mais baixo hoje" />
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <MetricCard
-                titulo="Média Atual"
-                valor={fmt(m.mediaAtual)}
-                subtitulo={m.variacaoMedia != null ? `${fmtPct(m.variacaoMedia)} vs semana anterior` : "sem dados anteriores"}
-                tendencia={m.variacaoMedia}
-              />
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <MetricCard titulo="Maior Preço" valor={fmt(m.maiorPreco)} subtitulo="preço mais alto hoje" />
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <MetricCard
-                titulo="Postos Acima da Média"
-                valor={`${m.percentualAcimaMedia.toFixed(0)}%`}
-                subtitulo={`${m.postosAcimaMedia} de ${m.totalPostos} postos`}
-                chip={m.percentualAcimaMedia > 50 ? "Maioria cara" : "Maioria em conta"}
-              />
-            </Grid>
+            {[
+              { titulo: "Menor Preço", valor: fmt(m.menorPreco), subtitulo: "preço mais baixo hoje" },
+              {
+                titulo: "Média Atual", valor: fmt(m.mediaAtual),
+                subtitulo: m.variacaoMedia != null ? `${fmtPct(m.variacaoMedia)} vs semana anterior` : "sem dados anteriores",
+                tendencia: m.variacaoMedia,
+              },
+              { titulo: "Maior Preço", valor: fmt(m.maiorPreco), subtitulo: "preço mais alto hoje" },
+              {
+                titulo: "Postos Acima da Média", valor: `${m.percentualAcimaMedia.toFixed(0)}%`,
+                subtitulo: `${m.postosAcimaMedia} de ${m.totalPostos} postos`,
+                chip: m.percentualAcimaMedia > 50 ? "Maioria cara" : "Maioria em conta",
+              },
+            ].map((card) => (
+              <Grid item xs={6} sm={3} key={card.titulo}>
+                <MetricCard {...card} />
+              </Grid>
+            ))}
           </Grid>
 
-          {/* EVOLUÇÃO */}
+          {/* EVOLUÇÃO 30 DIAS */}
           <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, mb: 3 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
               Evolução da Média — últimos 30 dias
@@ -191,93 +158,111 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </Paper>
 
-          {/* GRADE 2x2 */}
+          {/* 3 COLUNAS IGUAIS */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            {/* TOP 10 MENORES PREÇOS */}
-            <Grid item xs={12} md={6}>
-              <GraficoCard titulo="Top 10 Menores Preços" subtitulo="linha vermelha = média atual">
-                <BarChart data={dados.top10} layout="vertical" margin={{ top: 0, right: 20, bottom: 0, left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
-                  <YAxis type="category" dataKey="posto" tick={{ fontSize: 10 }} width={120}
-                    tickFormatter={(v) => v.length > 18 ? v.slice(0, 18) + "…" : v} />
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <ReferenceLine x={m.mediaAtual} stroke="#E02F52" strokeDasharray="4 2"
-                    label={{ value: "Média", position: "top", fontSize: 10, fill: "#E02F52" }} />
-                  <Bar dataKey="valorDeclarado" name="Preço declarado" radius={[0, 4, 4, 0]}>
-                    {dados.top10.map((entry, i) => (
-                      <Cell key={i} fill={entry.valorDeclarado <= m.mediaAtual ? "#4CAF50" : "#294D80"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </GraficoCard>
+
+            {/* TOP 10 */}
+            <Grid item xs={12} md={4}>
+              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, height: "100%" }}>
+                <Typography variant="subtitle1" fontWeight={700}>Top 10 Menores Preços</Typography>
+                <Typography variant="caption" color="text.secondary">linha vermelha = média atual</Typography>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={dados.top10} layout="vertical" margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
+                    <YAxis type="category" dataKey="posto" tick={{ fontSize: 9 }} width={110}
+                      tickFormatter={(v) => v.length > 15 ? v.slice(0, 15) + "…" : v} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <ReferenceLine x={m.mediaAtual} stroke="#E02F52" strokeDasharray="4 2"
+                      label={{ value: "Média", position: "insideTopRight", fontSize: 9, fill: "#E02F52" }} />
+                    <Bar dataKey="valorDeclarado" name="Preço declarado" radius={[0, 4, 4, 0]}>
+                      {dados.top10.map((entry, i) => (
+                        <Cell key={i} fill={entry.valorDeclarado <= m.mediaAtual ? "#4CAF50" : "#294D80"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Paper>
             </Grid>
 
             {/* MÉDIA POR BANDEIRA */}
-            <Grid item xs={12} md={6}>
-              <GraficoCard titulo="Média por Bandeira" subtitulo="últimos 7 dias">
-                <BarChart data={dados.porBandeira} margin={{ top: 0, right: 10, bottom: 40, left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="bandeira" tick={{ fontSize: 10, angle: -35, textAnchor: "end" }}
-                    tickFormatter={(v) => v.length > 12 ? v.slice(0, 12) + "…" : v} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <Bar dataKey="media" name="Média de preço" radius={[4, 4, 0, 0]}>
-                    {dados.porBandeira.map((_, i) => (
-                      <Cell key={i} fill={CORES[i % CORES.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </GraficoCard>
+            <Grid item xs={12} md={4}>
+              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, height: "100%" }}>
+                <Typography variant="subtitle1" fontWeight={700}>Média por Bandeira</Typography>
+                <Typography variant="caption" color="text.secondary">últimos 7 dias</Typography>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={dados.porBandeira} margin={{ top: 8, right: 8, bottom: 55, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="bandeira" tick={{ fontSize: 9, angle: -40, textAnchor: "end" }}
+                      tickFormatter={(v) => v.length > 10 ? v.slice(0, 10) + "…" : v} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Bar dataKey="media" name="Média de preço" radius={[4, 4, 0, 0]}>
+                      {dados.porBandeira.map((_, i) => (
+                        <Cell key={i} fill={CORES[i % CORES.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Paper>
             </Grid>
 
-            {/* MÉDIA POR MUNICÍPIO */}
-            <Grid item xs={12} md={6}>
-              <GraficoCard titulo="10 Municípios Mais Baratos" subtitulo="média dos últimos 7 dias — mín. 2 postos">
-                <BarChart data={dados.porMunicipio} layout="vertical" margin={{ top: 0, right: 20, bottom: 0, left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
-                  <YAxis type="category" dataKey="municipio" tick={{ fontSize: 10 }} width={130}
-                    tickFormatter={(v) => v.length > 20 ? v.slice(0, 20) + "…" : v} />
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <Bar dataKey="media" name="Média" radius={[0, 4, 4, 0]}>
-                    {dados.porMunicipio.map((_, i) => (
-                      <Cell key={i} fill={CORES[i % CORES.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </GraficoCard>
+            {/* 10 MUNICÍPIOS */}
+            <Grid item xs={12} md={4}>
+              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, height: "100%" }}>
+                <Typography variant="subtitle1" fontWeight={700}>10 Municípios Mais Baratos</Typography>
+                <Typography variant="caption" color="text.secondary">média dos últimos 7 dias — mín. 2 postos</Typography>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={dados.porMunicipio} layout="vertical" margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
+                    <YAxis type="category" dataKey="municipio" tick={{ fontSize: 9 }} width={110}
+                      tickFormatter={(v) => v.length > 15 ? v.slice(0, 15) + "…" : v} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Bar dataKey="media" name="Média" radius={[0, 4, 4, 0]}>
+                      {dados.porMunicipio.map((_, i) => (
+                        <Cell key={i} fill={CORES[i % CORES.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Paper>
             </Grid>
 
-            {/* CONCENTRAÇÃO POR BAIRRO */}
-            <Grid item xs={12} md={6}>
-              <GraficoCard titulo="Postos por Bairro" subtitulo="top 12 bairros com mais postos">
-                <BarChart data={dados.porBairro} margin={{ top: 0, right: 10, bottom: 50, left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="bairro" tick={{ fontSize: 10, angle: -40, textAnchor: "end" }}
-                    tickFormatter={(v) => v.length > 10 ? v.slice(0, 10) + "…" : v} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
-                  <RechartsTooltip
-                    formatter={(value, name) =>
-                      name === "Postos" ? [`${value} postos`, name] : [fmt(value), name]
-                    }
-                  />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="postos" name="Postos" fill="#294D80" radius={[4, 4, 0, 0]} />
-                  <Bar yAxisId="right" dataKey="media" name="Média preço" fill="#C4D2DE" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </GraficoCard>
-            </Grid>
           </Grid>
 
-          {/* DISTRIBUIÇÃO */}
+          {/* POSTOS POR BAIRRO — linha cheia */}
+          <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, mb: 3 }}>
+            <Typography variant="subtitle1" fontWeight={700}>Postos por Bairro</Typography>
+            <Typography variant="caption" color="text.secondary">
+              top 12 bairros — barras escuras = quantidade de postos (esq.) | barras claras = média de preço (dir.)
+            </Typography>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dados.porBairro} margin={{ top: 10, right: 50, bottom: 55, left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="bairro" tick={{ fontSize: 10, angle: -40, textAnchor: "end" }}
+                  tickFormatter={(v) => v.length > 12 ? v.slice(0, 12) + "…" : v} />
+                <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }}
+                  tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
+                <RechartsTooltip
+                  formatter={(value, name) =>
+                    name === "Postos" ? [`${value} postos`, name] : [fmt(value), name]
+                  }
+                />
+                <Legend />
+                <Bar yAxisId="left" dataKey="postos" name="Postos" fill="#294D80" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="right" dataKey="media" name="Média preço" fill="#C4D2DE" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Paper>
+
+          {/* DISTRIBUIÇÃO — linha cheia */}
           <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, mb: 3 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
               Distribuição de Preços — quantos postos por faixa
             </Typography>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={dados.histograma} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="faixa" tick={{ fontSize: 11 }} />

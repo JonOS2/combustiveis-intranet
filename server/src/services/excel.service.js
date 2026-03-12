@@ -1,15 +1,13 @@
 const XLSX = require('xlsx');
+const prisma = require('../database/prisma');
 const {
-  buscarPagina,
   resolverTipoParaSefaz,
-  enriquecerComBandeiras,
   filtrarPorTipo,
   ordenarRegistros
 } = require('./sefaz.service');
 
 /* =========================
    MAPA DE NOMES DE COMBUSTÍVEL
-   (para compor o nome do arquivo)
 ========================= */
 const MAPA_COMBUSTIVEL = {
   1: 'gasolina-comum',
@@ -21,10 +19,6 @@ const MAPA_COMBUSTIVEL = {
   7: 'diesel-s10-aditivado'
 };
 
-/* =========================
-   NORMALIZA TEXTO PARA NOME DE ARQUIVO
-   (remove acentos, espaços viram hífens, tudo minúsculo)
-========================= */
 const normalizarTexto = (texto = '') =>
   texto
     .normalize('NFD')
@@ -32,25 +26,17 @@ const normalizarTexto = (texto = '') =>
     .replace(/\s+/g, '-')
     .toLowerCase();
 
-/* =========================
-   GERA NOME DO ARQUIVO
-========================= */
 const gerarNomeArquivo = ({ registros, tipoCombustivel, ordenarPor, modo, pagina }) => {
   const nomeMunicipio = normalizarTexto(
     registros[0]?.estabelecimento?.endereco?.municipio || 'municipio-desconhecido'
   );
-
   const tipoNome = MAPA_COMBUSTIVEL[tipoCombustivel] || 'combustivel';
   const ordenacaoNome = ordenarPor === 'venda' ? 'ordenado-por-venda' : 'ordenado-por-declarado';
-
   return modo === 'tudo'
     ? `combustiveis-${nomeMunicipio}-${tipoNome}-${ordenacaoNome}-completo.xlsx`
     : `combustiveis-${nomeMunicipio}-${tipoNome}-${ordenacaoNome}-pagina-${pagina}.xlsx`;
 };
 
-/* =========================
-   CONVERTE REGISTROS EM BUFFER XLSX
-========================= */
 const gerarBufferExcel = (registros) => {
   const dadosExcel = registros.map(item => ({
     Posto: item.estabelecimento.nomeFantasia || item.estabelecimento.razaoSocial,
@@ -58,22 +44,90 @@ const gerarBufferExcel = (registros) => {
     'Valor Declarado (R$)': item.produto.venda.valorDeclarado,
     'Valor Venda (R$)': item.produto.venda.valorVenda,
     Bandeira: item.estabelecimento.bandeira || '—',
-    Data: item.produto.venda.dataVenda,
+    Data: new Date(item.produto.venda.dataVenda).toLocaleDateString('pt-BR'),
     Bairro: item.estabelecimento.endereco.bairro,
     Município: item.estabelecimento.endereco.municipio,
-    CNPJ: item.estabelecimento.cnpj
+    CNPJ: item.estabelecimento.cnpj,
+    Telefone: item.estabelecimento.telefone || '—',
+    Endereço: `${item.estabelecimento.endereco.nomeLogradouro || ''}, ${item.estabelecimento.endereco.numeroImovel || ''} — ${item.estabelecimento.endereco.bairro || ''}`.trim(),
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(dadosExcel);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Combustíveis');
-
   return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+};
+
+const formatarRegistroDoBanco = (preco) => ({
+  produto: {
+    codigo: preco.combustivel.codigo,
+    descricao: preco.combustivel.descricao,
+    unidadeMedida: preco.combustivel.unidade,
+    venda: {
+      valorVenda: preco.valorVenda,
+      valorDeclarado: preco.valorDeclarado,
+      dataVenda: preco.dataVenda,
+    },
+  },
+  estabelecimento: {
+    cnpj: preco.posto.cnpj,
+    razaoSocial: preco.posto.razaoSocial,
+    nomeFantasia: preco.posto.nomeFantasia,
+    telefone: preco.posto.telefone,
+    bandeira: preco.posto.bandeira,
+    endereco: {
+      nomeLogradouro: preco.posto.endereco,
+      numeroImovel: preco.posto.numero,
+      bairro: preco.posto.bairro,
+      cep: preco.posto.cep,
+      municipio: preco.posto.municipio?.nome,
+      codigoIBGE: preco.posto.municipio?.codigoIBGE,
+      latitude: preco.posto.latitude,
+      longitude: preco.posto.longitude,
+    },
+  },
+});
+
+/* =========================
+   BUSCA DO BANCO COM DEDUPLICAÇÃO
+========================= */
+const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor }) => {
+  const dataLimite = new Date();
+  dataLimite.setDate(dataLimite.getDate() - dias);
+
+  const tipoBanco = resolverTipoParaSefaz(tipoCombustivel);
+
+  const precosRaw = await prisma.preco.findMany({
+    where: {
+      dataVenda: { gte: dataLimite },
+      combustivel: { tipo: tipoBanco },
+      posto: { municipio: { codigoIBGE } },
+    },
+    include: {
+      posto: { include: { municipio: true } },
+      combustivel: true,
+    },
+    orderBy: { dataVenda: 'desc' },
+  });
+
+  // Deduplica — apenas o mais recente por posto+combustível
+  const vistos = new Set();
+  const deduplicados = precosRaw.filter((p) => {
+    const chave = `${p.postoId}-${p.combustivelId}`;
+    if (vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  });
+
+  let registros = deduplicados.map(formatarRegistroDoBanco);
+  registros = filtrarPorTipo(registros, tipoCombustivel);
+  registros = ordenarRegistros(registros, ordenarPor);
+
+  return registros;
 };
 
 /* =========================
    SERVIÇO PRINCIPAL DE EXPORTAÇÃO
-   Retorna: { buffer, nomeArquivo }
 ========================= */
 const gerarExcel = async ({
   tipoCombustivel = 1,
@@ -82,71 +136,29 @@ const gerarExcel = async ({
   registrosPorPagina = 50,
   modo = 'pagina',
   pagina = 1,
-  ordenarPor = 'declarado'
+  ordenarPor = 'declarado',
 }) => {
-  // ✅ BUG CORRIGIDO: tipoParaSefaz agora é declarado corretamente
-  const tipoParaSefaz = resolverTipoParaSefaz(tipoCombustivel);
+  const todosRegistros = await buscarDosBanco({ tipoCombustivel, dias, codigoIBGE, ordenarPor });
 
-  let todosRegistros = [];
+  if (todosRegistros.length === 0) {
+    throw new Error('SEM_DADOS');
+  }
+
+  let registros;
 
   if (modo === 'pagina') {
-    const data = await buscarPagina({
-      tipoCombustivel: tipoParaSefaz,
-      dias,
-      codigoIBGE,
-      pagina,
-      registrosPorPagina
-    });
-    todosRegistros = data.conteudo || [];
-  }
-
-  if (modo === 'tudo') {
-    const primeira = await buscarPagina({
-      tipoCombustivel: tipoParaSefaz,
-      dias,
-      codigoIBGE,
-      pagina: 1,
-      registrosPorPagina
-    });
-
-    const totalPaginas =
-      primeira.totalPaginas ||
-      primeira.paginacao?.totalPaginas ||
-      Math.ceil((primeira.paginacao?.totalRegistros || 0) / registrosPorPagina) ||
-      1;
-
-    if (totalPaginas > 20) {
+    const inicio = (pagina - 1) * registrosPorPagina;
+    registros = todosRegistros.slice(inicio, inicio + registrosPorPagina);
+  } else {
+    // modo === 'tudo'
+    if (todosRegistros.length > 2000) {
       throw new Error('EXPORTACAO_MUITO_GRANDE');
     }
-
-    todosRegistros = primeira.conteudo || [];
-
-    for (let p = 2; p <= totalPaginas; p++) {
-      const data = await buscarPagina({
-        tipoCombustivel: tipoParaSefaz,
-        dias,
-        codigoIBGE,
-        pagina: p,
-        registrosPorPagina
-      });
-      todosRegistros.push(...(data.conteudo || []));
-    }
+    registros = todosRegistros;
   }
 
-  // Enriquece com bandeira ANP, filtra por tipo e ordena
-  await enriquecerComBandeiras(todosRegistros);
-  todosRegistros = filtrarPorTipo(todosRegistros, tipoCombustivel);
-  todosRegistros = ordenarRegistros(todosRegistros, ordenarPor);
-
-  const nomeArquivo = gerarNomeArquivo({
-    registros: todosRegistros,
-    tipoCombustivel,
-    ordenarPor,
-    modo,
-    pagina
-  });
-
-  const buffer = gerarBufferExcel(todosRegistros);
+  const nomeArquivo = gerarNomeArquivo({ registros, tipoCombustivel, ordenarPor, modo, pagina });
+  const buffer = gerarBufferExcel(registros);
 
   return { buffer, nomeArquivo };
 };

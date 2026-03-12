@@ -157,6 +157,10 @@ const exportarExcel = async (req, res) => {
     if (error.message === 'EXPORTACAO_MUITO_GRANDE') {
       return res.status(400).json({ error: 'Exportação muito grande. Refine os filtros.' });
     }
+    // No bloco catch do exportarExcel:
+    if (error.message === 'SEM_DADOS') {
+      return res.status(404).json({ error: 'Nenhum dado encontrado para os filtros selecionados.' });
+    }
     console.error('❌ Erro exportarExcel:', error.message);
     res.status(500).json({ error: 'Erro ao gerar Excel' });
   }

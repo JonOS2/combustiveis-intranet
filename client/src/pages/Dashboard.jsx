@@ -138,7 +138,7 @@ export default function Dashboard() {
           <Select
             value={codigoIBGE}
             label="Município"
-            onChange={(e) => setCodigoIBGE(e.target.value)}
+            onChange={(e) => setCodigoIBGE(Number(e.target.value))}
           >
             {MUNICIPIOS.map((m) => (
               <MenuItem key={m.ibge} value={m.ibge}>{m.nome}</MenuItem>

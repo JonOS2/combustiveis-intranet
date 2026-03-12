@@ -121,7 +121,7 @@ export default function App() {
   const tabValue = location.pathname === "/dashboard" ? 1 : 0;
 
   return (
-    <Container maxWidth="lg" sx={{ py: 3 }}>
+    <Container maxWidth="md" sx={{ py: 3 }}>
       {/* HEADER */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
         <LocalGasStationIcon color="primary" fontSize="large" />

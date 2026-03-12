@@ -159,11 +159,10 @@ export default function Dashboard() {
           </Paper>
 
           {/* 3 COLUNAS IGUAIS */}
-          <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, mb: 3 }}>
 
             {/* TOP 10 */}
-            <Grid item xs={12} md={4}>
-              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, height: "100%" }}>
+              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3}}>
                 <Typography variant="subtitle1" fontWeight={700}>Top 10 Menores Preços</Typography>
                 <Typography variant="caption" color="text.secondary">linha vermelha = média atual</Typography>
                 <ResponsiveContainer width="100%" height={300}>
@@ -183,11 +182,9 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </Paper>
-            </Grid>
 
             {/* MÉDIA POR BANDEIRA */}
-            <Grid item xs={12} md={4}>
-              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, height: "100%" }}>
+              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3}}>
                 <Typography variant="subtitle1" fontWeight={700}>Média por Bandeira</Typography>
                 <Typography variant="caption" color="text.secondary">últimos 7 dias</Typography>
                 <ResponsiveContainer width="100%" height={300}>
@@ -205,11 +202,9 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </Paper>
-            </Grid>
 
             {/* 10 MUNICÍPIOS */}
-            <Grid item xs={12} md={4}>
-              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, height: "100%" }}>
+              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3}}>
                 <Typography variant="subtitle1" fontWeight={700}>10 Municípios Mais Baratos</Typography>
                 <Typography variant="caption" color="text.secondary">média dos últimos 7 dias — mín. 2 postos</Typography>
                 <ResponsiveContainer width="100%" height={300}>
@@ -227,9 +222,8 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </Paper>
-            </Grid>
 
-          </Grid>
+          </Box>
 
           {/* POSTOS POR BAIRRO — linha cheia */}
           <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, mb: 3 }}>

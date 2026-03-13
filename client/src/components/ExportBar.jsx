@@ -60,33 +60,36 @@ export default function ExportBar({ filtros, pagina }) {
   return (
     <>
       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center" }}>
-        {/* Página atual — outlined verde claro */}
+
+        {/* Página atual — contained verde, texto branco */}
         <Button
-          variant="outlined"
+          variant="contained"
           size="small"
           startIcon={loading.pagina ? <CircularProgress size={14} color="inherit" /> : <DownloadIcon />}
           disabled={anyLoading}
           onClick={() => exportar("pagina")}
           sx={{
-            borderColor: "#66bb6a",
-            color: "#66bb6a",
-            "&:hover": { borderColor: "#43a047", color: "#43a047", backgroundColor: "rgba(102,187,106,0.08)" },
+            backgroundColor: "#43a047",
+            color: "#fff",
+            "&:hover": { backgroundColor: "#2e7d32" },
+            "&:disabled": { backgroundColor: "#a5d6a7", color: "#fff" },
           }}
         >
           Exportar página atual
         </Button>
 
-        {/* Todo município — outlined verde claro */}
+        {/* Todo município — contained verde, texto branco */}
         <Button
-          variant="outlined"
+          variant="contained"
           size="small"
           startIcon={loading.tudo ? <CircularProgress size={14} color="inherit" /> : <DownloadIcon />}
           disabled={anyLoading}
           onClick={() => exportar("tudo")}
           sx={{
-            borderColor: "#66bb6a",
-            color: "#66bb6a",
-            "&:hover": { borderColor: "#43a047", color: "#43a047", backgroundColor: "rgba(102,187,106,0.08)" },
+            backgroundColor: "#43a047",
+            color: "#fff",
+            "&:hover": { backgroundColor: "#2e7d32" },
+            "&:disabled": { backgroundColor: "#a5d6a7", color: "#fff" },
           }}
         >
           Exportar todo município

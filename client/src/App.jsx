@@ -1,5 +1,5 @@
 import { Routes, Route, NavLink, useLocation } from "react-router-dom";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Box, Container, Typography, Alert, Divider,
   Tabs, Tab, Paper,
@@ -28,16 +28,27 @@ function PesquisaPage() {
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(0);
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
-  const [bairroFiltro, setBairroFiltro] = useState("");
+  const [bandeiraFiltro, setBandeiraFiltro] = useState("");
   const [postoFiltro, setPostoFiltro] = useState("");
   const [aviso, setAviso] = useState(null);
 
-  const filtroAtivo = bairroFiltro.trim() !== "" || postoFiltro.trim() !== "";
+  const filtroAtivo = bandeiraFiltro.trim() !== "" || postoFiltro.trim() !== "";
+
+  // Extrai bandeiras únicas dos resultados atuais, ordenadas alfabeticamente
+  const bandeirasDisponiveis = useMemo(() => {
+    const set = new Set();
+    dados.forEach((item) => {
+      const b = item.estabelecimento.bandeira;
+      if (b && b !== "—") set.add(b);
+    });
+    return Array.from(set).sort();
+  }, [dados]);
 
   const buscar = useCallback(
     async (novaPagina = 1, diasOverride = null) => {
       setLoading(true);
       setAviso(null);
+      setBandeiraFiltro(""); // limpa filtro de bandeira ao buscar novos dados
       try {
         const diasUsado = diasOverride ?? filtros.dias;
         const res = await api.post("/combustivel", {
@@ -74,10 +85,10 @@ function PesquisaPage() {
   }, []);
 
   const dadosFiltrados = dados.filter((item) => {
-    const bairro = normalizar(item.estabelecimento.endereco.bairro);
     const posto = normalizar(item.estabelecimento.nomeFantasia || item.estabelecimento.razaoSocial);
+    const bandeira = item.estabelecimento.bandeira || "";
     return (
-      (!bairroFiltro || bairro.includes(normalizar(bairroFiltro))) &&
+      (!bandeiraFiltro || bandeira === bandeiraFiltro) &&
       (!postoFiltro || posto.includes(normalizar(postoFiltro)))
     );
   });
@@ -86,11 +97,12 @@ function PesquisaPage() {
     <>
       <FiltrosBar
         filtros={filtros}
-        bairroFiltro={bairroFiltro}
+        bandeiraFiltro={bandeiraFiltro}
         postoFiltro={postoFiltro}
+        bandeirasDisponiveis={bandeirasDisponiveis}
         loading={loading}
         onFiltroChange={handleFiltroChange}
-        onBairroChange={setBairroFiltro}
+        onBandeiraChange={setBandeiraFiltro}
         onPostoChange={setPostoFiltro}
         onBuscar={buscar}
       />
@@ -122,20 +134,18 @@ export default function App() {
 
   return (
     <Container maxWidth="md" sx={{ py: 3 }}>
-      {/* HEADER */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-        <LocalGasStationIcon color="primary" fontSize="large" />
-        <Typography variant="h5" fontWeight={700}>
-          AMGESP — Combustíveis
-        </Typography>
-        <Box sx={{ ml: "auto" }}>
+      <Paper elevation={0} sx={{ mb: 3, p: 2, borderRadius: 2, border: "1px solid", borderColor: "grey.200" }}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <LocalGasStationIcon color="primary" />
+            <Typography variant="h6" fontWeight={700}>
+              Combustíveis AL
+            </Typography>
+          </Box>
           <StatusModal />
         </Box>
-      </Box>
 
-      {/* NAVEGAÇÃO */}
-      <Paper elevation={0} sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
-        <Tabs value={tabValue} indicatorColor="primary" textColor="primary">
+        <Tabs value={tabValue} sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Tab
             icon={<SearchIcon fontSize="small" />}
             iconPosition="start"
@@ -153,7 +163,6 @@ export default function App() {
         </Tabs>
       </Paper>
 
-      {/* ROTAS */}
       <Routes>
         <Route path="/" element={<PesquisaPage />} />
         <Route path="/dashboard" element={<Dashboard />} />

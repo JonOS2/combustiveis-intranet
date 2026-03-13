@@ -28,7 +28,7 @@ const buscarPagina = async ({
       appToken: process.env.APP_TOKEN,
       'Content-Type': 'application/json'
     },
-    timeout: 30000
+    timeout: 12000, // reduzido de 30s para 12s — API responde rápido ou não responde
   });
 
   return response.data;
@@ -79,7 +79,7 @@ const buscarBandeiraPorCNPJ = async (cnpj) => {
     return bandeira;
   } catch (error) {
     console.error(`❌ Erro ANP (${cnpj}):`, error.message);
-    cacheBandeiras[cnpj] = null; // cacheia null para não tentar de novo no mesmo sync
+    cacheBandeiras[cnpj] = null;
     return null;
   }
 };

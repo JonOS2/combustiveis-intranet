@@ -13,20 +13,17 @@ import {
   OPCOES_ORDENACAO,
 } from "../constants/combustiveis";
 
-/* =========================
-   COMPONENTE
-========================= */
 export default function FiltrosBar({
   filtros,
-  bairroFiltro,
+  bandeiraFiltro,
   postoFiltro,
+  bandeirasDisponiveis,
   loading,
   onFiltroChange,
-  onBairroChange,
+  onBandeiraChange,
   onPostoChange,
   onBuscar,
 }) {
-  // Quando muda ordenação já dispara busca imediatamente
   const handleOrdenacaoChange = (e) => {
     onFiltroChange("ordenarPor", e.target.value);
     onBuscar(1);
@@ -105,20 +102,22 @@ export default function FiltrosBar({
         ))}
       </TextField>
 
-      {/* FILTRO DE BAIRRO */}
+      {/* FILTRO DE BANDEIRA */}
       <TextField
-        label="Filtrar por bairro"
+        select
+        label="Filtrar por bandeira"
         size="small"
-        value={bairroFiltro}
-        onChange={(e) => onBairroChange(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
-        }}
-      />
+        value={bandeiraFiltro}
+        onChange={(e) => onBandeiraChange(e.target.value)}
+        disabled={bandeirasDisponiveis.length === 0}
+      >
+        <MenuItem value="">Todas as bandeiras</MenuItem>
+        {bandeirasDisponiveis.map((b) => (
+          <MenuItem key={b} value={b}>
+            {b}
+          </MenuItem>
+        ))}
+      </TextField>
 
       {/* FILTRO DE POSTO */}
       <TextField

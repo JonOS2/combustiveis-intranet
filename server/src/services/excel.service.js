@@ -127,10 +127,11 @@ const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor })
     orderBy: { dataVenda: 'desc' },
   });
 
-  // Deduplica — apenas o mais recente por posto+combustível
+  // Deduplica por CNPJ — mantém apenas o registro mais recente por posto
+  // (resolve casos onde o mesmo posto tem produtos com códigos diferentes mas mesmo tipo)
   const vistos = new Set();
   const deduplicados = precosRaw.filter((p) => {
-    const chave = `${p.postoId}-${p.combustivelId}`;
+    const chave = p.posto.cnpj;
     if (vistos.has(chave)) return false;
     vistos.add(chave);
     return true;
@@ -155,7 +156,6 @@ const gerarExcel = async ({
   pagina = 1,
   ordenarPor = 'declarado',
 }) => {
-  // Modo estado: busca todos os municípios, sem filtro de IBGE
   const ibgeFiltro = modo === 'estado' ? null : codigoIBGE;
   const limiteRegistros = modo === 'estado' ? 10000 : 2000;
 
@@ -176,7 +176,6 @@ const gerarExcel = async ({
     const inicio = (pagina - 1) * registrosPorPagina;
     registros = todosRegistros.slice(inicio, inicio + registrosPorPagina);
   } else {
-    // modo 'tudo' ou 'estado'
     if (todosRegistros.length > limiteRegistros) {
       throw new Error('EXPORTACAO_MUITO_GRANDE');
     }

@@ -99,9 +99,11 @@ const getCombustiveis = async (req, res) => {
       orderBy: { dataVenda: 'desc' },
     });
 
+    // Deduplica por CNPJ — mantém apenas o registro mais recente por posto
+    // (resolve casos onde o mesmo posto tem produtos com códigos diferentes mas mesmo tipo)
     const vistos = new Set();
     const precosMaisRecentes = precosRaw.filter((p) => {
-      const chave = `${p.postoId}-${p.combustivelId}`;
+      const chave = p.posto.cnpj;
       if (vistos.has(chave)) return false;
       vistos.add(chave);
       return true;

@@ -6,9 +6,6 @@ const {
   ordenarRegistros
 } = require('./sefaz.service');
 
-/* =========================
-   MAPA DE NOMES DE COMBUSTÍVEL
-========================= */
 const MAPA_COMBUSTIVEL = {
   1: 'gasolina-comum',
   2: 'gasolina-aditivada',
@@ -20,18 +17,20 @@ const MAPA_COMBUSTIVEL = {
 };
 
 const normalizarTexto = (texto = '') =>
-  texto
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '-')
-    .toLowerCase();
+  texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').toLowerCase();
 
 const gerarNomeArquivo = ({ registros, tipoCombustivel, ordenarPor, modo, pagina }) => {
+  const tipoNome = MAPA_COMBUSTIVEL[tipoCombustivel] || 'combustivel';
+  const ordenacaoNome = ordenarPor === 'venda' ? 'ordenado-por-venda' : 'ordenado-por-declarado';
+
+  if (modo === 'estado') {
+    return `combustiveis-alagoas-${tipoNome}-${ordenacaoNome}-completo.xlsx`;
+  }
+
   const nomeMunicipio = normalizarTexto(
     registros[0]?.estabelecimento?.endereco?.municipio || 'municipio-desconhecido'
   );
-  const tipoNome = MAPA_COMBUSTIVEL[tipoCombustivel] || 'combustivel';
-  const ordenacaoNome = ordenarPor === 'venda' ? 'ordenado-por-venda' : 'ordenado-por-declarado';
+
   return modo === 'tudo'
     ? `combustiveis-${nomeMunicipio}-${tipoNome}-${ordenacaoNome}-completo.xlsx`
     : `combustiveis-${nomeMunicipio}-${tipoNome}-${ordenacaoNome}-pagina-${pagina}.xlsx`;
@@ -40,19 +39,34 @@ const gerarNomeArquivo = ({ registros, tipoCombustivel, ordenarPor, modo, pagina
 const gerarBufferExcel = (registros) => {
   const dadosExcel = registros.map(item => ({
     Posto: item.estabelecimento.nomeFantasia || item.estabelecimento.razaoSocial,
+    Município: item.estabelecimento.endereco.municipio,
+    Bairro: item.estabelecimento.endereco.bairro,
     Produto: item.produto.descricao,
     'Valor Declarado (R$)': item.produto.venda.valorDeclarado,
     'Valor Venda (R$)': item.produto.venda.valorVenda,
     Bandeira: item.estabelecimento.bandeira || '—',
     Data: new Date(item.produto.venda.dataVenda).toLocaleDateString('pt-BR'),
-    Bairro: item.estabelecimento.endereco.bairro,
-    Município: item.estabelecimento.endereco.municipio,
     CNPJ: item.estabelecimento.cnpj,
     Telefone: item.estabelecimento.telefone || '—',
     Endereço: `${item.estabelecimento.endereco.nomeLogradouro || ''}, ${item.estabelecimento.endereco.numeroImovel || ''} — ${item.estabelecimento.endereco.bairro || ''}`.trim(),
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(dadosExcel);
+
+  // Autofit nas colunas
+  const colunas = Object.keys(dadosExcel[0] || {});
+  worksheet['!cols'] = colunas.map((col) => {
+    const maxLen = Math.max(
+      col.length,
+      ...dadosExcel.map(row => String(row[col] ?? '').length)
+    );
+    return { wch: Math.min(maxLen + 2, 50) };
+  });
+
+  // Filtro automático em todas as colunas
+  const range = XLSX.utils.decode_range(worksheet['!ref']);
+  worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: range.e.c } }) };
+
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Combustíveis');
   return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
@@ -90,6 +104,7 @@ const formatarRegistroDoBanco = (preco) => ({
 
 /* =========================
    BUSCA DO BANCO COM DEDUPLICAÇÃO
+   codigoIBGE = null → todos os municípios (estado)
 ========================= */
 const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor }) => {
   const dataLimite = new Date();
@@ -97,12 +112,14 @@ const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor })
 
   const tipoBanco = resolverTipoParaSefaz(tipoCombustivel);
 
+  const where = {
+    dataVenda: { gte: dataLimite },
+    combustivel: { tipo: tipoBanco },
+    ...(codigoIBGE ? { posto: { municipio: { codigoIBGE } } } : {}),
+  };
+
   const precosRaw = await prisma.preco.findMany({
-    where: {
-      dataVenda: { gte: dataLimite },
-      combustivel: { tipo: tipoBanco },
-      posto: { municipio: { codigoIBGE } },
-    },
+    where,
     include: {
       posto: { include: { municipio: true } },
       combustivel: true,
@@ -138,7 +155,16 @@ const gerarExcel = async ({
   pagina = 1,
   ordenarPor = 'declarado',
 }) => {
-  const todosRegistros = await buscarDosBanco({ tipoCombustivel, dias, codigoIBGE, ordenarPor });
+  // Modo estado: busca todos os municípios, sem filtro de IBGE
+  const ibgeFiltro = modo === 'estado' ? null : codigoIBGE;
+  const limiteRegistros = modo === 'estado' ? 10000 : 2000;
+
+  const todosRegistros = await buscarDosBanco({
+    tipoCombustivel,
+    dias,
+    codigoIBGE: ibgeFiltro,
+    ordenarPor,
+  });
 
   if (todosRegistros.length === 0) {
     throw new Error('SEM_DADOS');
@@ -150,8 +176,8 @@ const gerarExcel = async ({
     const inicio = (pagina - 1) * registrosPorPagina;
     registros = todosRegistros.slice(inicio, inicio + registrosPorPagina);
   } else {
-    // modo === 'tudo'
-    if (todosRegistros.length > 2000) {
+    // modo 'tudo' ou 'estado'
+    if (todosRegistros.length > limiteRegistros) {
       throw new Error('EXPORTACAO_MUITO_GRANDE');
     }
     registros = todosRegistros;

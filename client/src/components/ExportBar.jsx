@@ -3,25 +3,21 @@ import { Box, Button, CircularProgress, Snackbar, Alert } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import api from "../api/combustivel";
 
-/* =========================
-   COMPONENTE
-========================= */
 export default function ExportBar({ filtros, pagina }) {
-  const [loadingPagina, setLoadingPagina] = useState(false);
-  const [loadingTudo, setLoadingTudo] = useState(false);
+  const [loading, setLoading] = useState({ pagina: false, tudo: false, estado: false });
   const [erro, setErro] = useState(null);
 
   const exportar = async (modo) => {
-    const setLoading = modo === "pagina" ? setLoadingPagina : setLoadingTudo;
-
     if (
-      modo === "tudo" &&
-      !window.confirm("Isso pode demorar alguns segundos. Deseja continuar?")
-    ) {
-      return;
-    }
+      (modo === "tudo" || modo === "estado") &&
+      !window.confirm(
+        modo === "estado"
+          ? "Isso vai exportar todos os municípios de Alagoas e pode demorar alguns segundos. Deseja continuar?"
+          : "Isso pode demorar alguns segundos. Deseja continuar?"
+      )
+    ) return;
 
-    setLoading(true);
+    setLoading((prev) => ({ ...prev, [modo]: true }));
     setErro(null);
 
     try {
@@ -31,7 +27,6 @@ export default function ExportBar({ filtros, pagina }) {
         { responseType: "blob" }
       );
 
-      // Extrai nome do arquivo do header Content-Disposition
       const disposition = response.headers["content-disposition"];
       let nomeArquivo = "combustiveis.xlsx";
       if (disposition) {
@@ -39,7 +34,6 @@ export default function ExportBar({ filtros, pagina }) {
         if (match?.[1]) nomeArquivo = match[1];
       }
 
-      // Dispara o download no browser
       const url = window.URL.createObjectURL(
         new Blob([response.data], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -57,9 +51,11 @@ export default function ExportBar({ filtros, pagina }) {
       console.error(err);
       setErro("Erro ao exportar. Tente novamente.");
     } finally {
-      setLoading(false);
+      setLoading((prev) => ({ ...prev, [modo]: false }));
     }
   };
+
+  const anyLoading = Object.values(loading).some(Boolean);
 
   return (
     <>
@@ -68,12 +64,8 @@ export default function ExportBar({ filtros, pagina }) {
           variant="outlined"
           color="success"
           size="small"
-          startIcon={
-            loadingPagina
-              ? <CircularProgress size={14} color="inherit" />
-              : <DownloadIcon />
-          }
-          disabled={loadingPagina || loadingTudo}
+          startIcon={loading.pagina ? <CircularProgress size={14} color="inherit" /> : <DownloadIcon />}
+          disabled={anyLoading}
           onClick={() => exportar("pagina")}
         >
           Exportar página atual
@@ -83,28 +75,32 @@ export default function ExportBar({ filtros, pagina }) {
           variant="outlined"
           color="success"
           size="small"
-          startIcon={
-            loadingTudo
-              ? <CircularProgress size={14} color="inherit" />
-              : <DownloadIcon />
-          }
-          disabled={loadingPagina || loadingTudo}
+          startIcon={loading.tudo ? <CircularProgress size={14} color="inherit" /> : <DownloadIcon />}
+          disabled={anyLoading}
           onClick={() => exportar("tudo")}
         >
           Exportar todo município
         </Button>
+
+        <Button
+          variant="outlined"
+          color="warning"
+          size="small"
+          startIcon={loading.estado ? <CircularProgress size={14} color="inherit" /> : <DownloadIcon />}
+          disabled={anyLoading}
+          onClick={() => exportar("estado")}
+        >
+          Exportar estado inteiro
+        </Button>
       </Box>
 
-      {/* FEEDBACK DE ERRO */}
       <Snackbar
         open={!!erro}
         autoHideDuration={4000}
         onClose={() => setErro(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert severity="error" onClose={() => setErro(null)}>
-          {erro}
-        </Alert>
+        <Alert severity="error" onClose={() => setErro(null)}>{erro}</Alert>
       </Snackbar>
     </>
   );

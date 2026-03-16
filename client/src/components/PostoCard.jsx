@@ -9,6 +9,8 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LocalGasStationIcon from "@mui/icons-material/LocalGasStation";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 
 /* =========================
    HELPERS
@@ -32,10 +34,48 @@ const gerarLinkMaps = (item) => {
 };
 
 /* =========================
-   COMPONENTE
+   BADGE DE VARIAÇÃO DE PREÇO
+========================= */
+function BadgeVariacao({ variacao }) {
+  if (!variacao) return null;
+
+  // Ignora variações insignificantes (< 0.5%)
+  if (Math.abs(variacao.pct) < 0.5) return null;
+
+  const subiu = variacao.diff > 0;
+  const cor = subiu ? "#c62828" : "#2e7d32";
+  const bg = subiu ? "#ffebee" : "#e8f5e9";
+  const Icon = subiu ? TrendingUpIcon : TrendingDownIcon;
+  const sinal = subiu ? "+" : "";
+
+  return (
+    <Box
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.4,
+        px: 0.8,
+        py: 0.2,
+        borderRadius: 1,
+        backgroundColor: bg,
+        color: cor,
+        fontSize: 11,
+        fontWeight: 700,
+        ml: 0.5,
+      }}
+      title={`Anterior: ${formatarMoeda(variacao.anterior)}`}
+    >
+      <Icon sx={{ fontSize: 13 }} />
+      {sinal}{variacao.pct}%
+    </Box>
+  );
+}
+
+/* =========================
+   COMPONENTE PRINCIPAL
 ========================= */
 export default function PostoCard({ item }) {
-  const { estabelecimento, produto } = item;
+  const { estabelecimento, produto, variacao } = item;
 
   const postoNome =
     estabelecimento.nomeFantasia || estabelecimento.razaoSocial || "Posto sem nome";
@@ -51,7 +91,7 @@ export default function PostoCard({ item }) {
         borderColor: "grey.200",
         borderRadius: "12px !important",
         mb: 1,
-        "&:before": { display: "none" }, // remove divisor padrão do MUI
+        "&:before": { display: "none" },
         "&:hover": {
           borderColor: "primary.light",
           boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
@@ -69,26 +109,21 @@ export default function PostoCard({ item }) {
               {postoNome}
             </Typography>
 
-            <Box
-              sx={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 1,
-                mt: 0.5,
-                alignItems: "center",
-              }}
-            >
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 0.5, alignItems: "center" }}>
               <Chip
                 label={`Venda: ${formatarMoeda(produto.venda.valorVenda)}`}
                 size="small"
                 color="primary"
                 variant="outlined"
               />
-              <Chip
-                label={`Declarado: ${formatarMoeda(produto.venda.valorDeclarado)}`}
-                size="small"
-                variant="outlined"
-              />
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                <Chip
+                  label={`Declarado: ${formatarMoeda(produto.venda.valorDeclarado)}`}
+                  size="small"
+                  variant="outlined"
+                />
+                <BadgeVariacao variacao={variacao} />
+              </Box>
               {estabelecimento.bandeira && (
                 <Chip
                   label={estabelecimento.bandeira}
@@ -114,11 +149,14 @@ export default function PostoCard({ item }) {
         >
           <Detail label="Produto" value={produto.descricao} />
           <Detail label="Data" value={formatarData(produto.venda.dataVenda)} />
-          <Detail
-            label="Telefone"
-            value={estabelecimento.telefone || "Não informado"}
-          />
+          <Detail label="Telefone" value={estabelecimento.telefone || "Não informado"} />
           <Detail label="CNPJ" value={estabelecimento.cnpj} />
+          {variacao && Math.abs(variacao.pct) >= 0.5 && (
+            <Detail
+              label="Preço anterior"
+              value={`${formatarMoeda(variacao.anterior)} (${variacao.diff > 0 ? "+" : ""}${variacao.pct}%)`}
+            />
+          )}
           <Box sx={{ gridColumn: { sm: "1 / -1" } }}>
             <Typography variant="body2" color="text.secondary" component="span">
               <strong>Endereço: </strong>

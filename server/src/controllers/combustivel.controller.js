@@ -99,7 +99,7 @@ const getCombustiveis = async (req, res) => {
       orderBy: { dataVenda: 'desc' },
     });
 
-    // Última atualização deste município+tipo (createdAt do registro mais recente)
+    // Última atualização deste município+tipo
     const ultimaAtualizacao = await prisma.preco.findFirst({
       where,
       orderBy: { createdAt: 'desc' },
@@ -115,6 +115,26 @@ const getCombustiveis = async (req, res) => {
       return true;
     });
 
+    // Busca preço anterior de cada posto (penúltimo registro antes do período atual)
+    const postoIds = precosMaisRecentes.map(p => p.postoId);
+    const precosAnteriores = await prisma.preco.findMany({
+      where: {
+        postoId: { in: postoIds },
+        combustivel: { tipo: tipoBanco },
+        dataVenda: { lt: dataLimite },
+      },
+      orderBy: { dataVenda: 'desc' },
+      select: { postoId: true, valorDeclarado: true, dataVenda: true },
+    });
+
+    // Mapa: postoId → preço anterior mais recente
+    const mapaAnteriores = new Map();
+    for (const p of precosAnteriores) {
+      if (!mapaAnteriores.has(p.postoId)) {
+        mapaAnteriores.set(p.postoId, p.valorDeclarado);
+      }
+    }
+
     const campo = ordenarPor === 'venda' ? 'valorVenda' : 'valorDeclarado';
     precosMaisRecentes.sort((a, b) => (a[campo] ?? 0) - (b[campo] ?? 0));
 
@@ -122,7 +142,26 @@ const getCombustiveis = async (req, res) => {
     const inicio = (pagina - 1) * registrosPorPagina;
     const paginados = precosMaisRecentes.slice(inicio, inicio + registrosPorPagina);
 
-    let conteudo = paginados.map(formatarRegistroDoBanco);
+    let conteudo = paginados.map(p => {
+      const item = formatarRegistroDoBanco(p);
+      const precoAnterior = mapaAnteriores.get(p.postoId);
+      const precoAtual = p.valorDeclarado;
+
+      if (precoAnterior != null && precoAtual != null) {
+        const diff = precoAtual - precoAnterior;
+        const pct = (diff / precoAnterior) * 100;
+        item.variacao = {
+          anterior: precoAnterior,
+          diff: parseFloat(diff.toFixed(3)),
+          pct: parseFloat(pct.toFixed(1)),
+        };
+      } else {
+        item.variacao = null;
+      }
+
+      return item;
+    });
+
     conteudo = filtrarPorTipo(conteudo, tipoCombustivel);
 
     res.json({

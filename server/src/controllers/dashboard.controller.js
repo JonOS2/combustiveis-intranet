@@ -22,7 +22,7 @@ const getDashboard = async (req, res) => {
       prisma.preco.findMany({
         where: where(1),
         include: { posto: { include: { municipio: true } }, combustivel: true },
-        orderBy: { valorDeclarado: 'asc' },
+        orderBy: { dataVenda: 'desc' },
       }),
 
       prisma.preco.groupBy({
@@ -85,24 +85,24 @@ const getDashboard = async (req, res) => {
       precosBase = await prisma.preco.findMany({
         where: where(7),
         include: { posto: { include: { municipio: true } }, combustivel: true },
-        orderBy: { valorDeclarado: 'asc' },
+        orderBy: { dataVenda: 'desc' },
       });
     }
 
-    // Deduplica — apenas o mais recente por posto
+    // Deduplica por CNPJ — mantém apenas o registro mais recente por posto
+    // (mesmo critério da pesquisa — resolve postos com múltiplos produtos cadastrados)
     const vistos = new Set();
     const precosDeduplicated = precosBase
-      .sort((a, b) => new Date(b.dataVenda) - new Date(a.dataVenda))
       .filter((p) => {
-        if (vistos.has(p.postoId)) return false;
-        vistos.add(p.postoId);
+        const cnpj = p.posto.cnpj;
+        if (vistos.has(cnpj)) return false;
+        vistos.add(cnpj);
         return true;
       })
       .sort((a, b) => (a.valorDeclarado ?? 0) - (b.valorDeclarado ?? 0));
 
     const valores = precosDeduplicated.map(p => p.valorDeclarado ?? p.valorVenda).filter(Boolean);
     const mediaAtual = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : 0;
-    // menorPreco e maiorPreco dos postos deduplicados (mesma base do histograma e top10)
     const menorPreco = valores.length ? Math.min(...valores) : 0;
     const maiorPreco = valores.length ? Math.max(...valores) : 0;
 

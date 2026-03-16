@@ -2,11 +2,12 @@ import { Routes, Route, NavLink, useLocation } from "react-router-dom";
 import { useState, useCallback, useMemo } from "react";
 import {
   Box, Container, Typography, Alert, Divider,
-  Tabs, Tab, Paper,
+  Tabs, Tab, Paper, Chip,
 } from "@mui/material";
 import LocalGasStationIcon from "@mui/icons-material/LocalGasStation";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import SearchIcon from "@mui/icons-material/Search";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
 
 import api from "./api/combustivel";
 import { FILTROS_INICIAIS } from "./constants/combustiveis";
@@ -18,6 +19,23 @@ import Dashboard from "./pages/Dashboard";
 
 const normalizar = (texto = "") =>
   texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+const formatarUltimaAtualizacao = (iso) => {
+  if (!iso) return null;
+  const data = new Date(iso);
+  const agora = new Date();
+  const diffMs = agora - data;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHoras = Math.floor(diffMin / 60);
+
+  if (diffMin < 1) return "atualizado agora";
+  if (diffMin < 60) return `atualizado há ${diffMin} min`;
+  if (diffHoras < 24) {
+    const hora = data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return `atualizado hoje às ${hora}`;
+  }
+  return `atualizado em ${data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+};
 
 /* =========================
    TELA DE PESQUISA
@@ -31,10 +49,10 @@ function PesquisaPage() {
   const [bandeiraFiltro, setBandeiraFiltro] = useState("");
   const [postoFiltro, setPostoFiltro] = useState("");
   const [aviso, setAviso] = useState(null);
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState(null);
 
   const filtroAtivo = bandeiraFiltro.trim() !== "" || postoFiltro.trim() !== "";
 
-  // Extrai bandeiras únicas dos resultados atuais, ordenadas alfabeticamente
   const bandeirasDisponiveis = useMemo(() => {
     const set = new Set();
     dados.forEach((item) => {
@@ -48,7 +66,7 @@ function PesquisaPage() {
     async (novaPagina = 1, diasOverride = null) => {
       setLoading(true);
       setAviso(null);
-      setBandeiraFiltro(""); // limpa filtro de bandeira ao buscar novos dados
+      setBandeiraFiltro("");
       try {
         const diasUsado = diasOverride ?? filtros.dias;
         const res = await api.post("/combustivel", {
@@ -68,6 +86,7 @@ function PesquisaPage() {
         setDados(conteudo);
         setPagina(res.data.pagina);
         setTotalPaginas(res.data.totalPaginas);
+        setUltimaAtualizacao(res.data.ultimaAtualizacao || null);
       } catch {
         setAviso({
           severity: "error",
@@ -93,6 +112,8 @@ function PesquisaPage() {
     );
   });
 
+  const textoAtualizacao = formatarUltimaAtualizacao(ultimaAtualizacao);
+
   return (
     <>
       <FiltrosBar
@@ -106,7 +127,21 @@ function PesquisaPage() {
         onPostoChange={setPostoFiltro}
         onBuscar={buscar}
       />
-      <ExportBar filtros={filtros} pagina={pagina} />
+
+      {/* INDICADOR DE ÚLTIMA ATUALIZAÇÃO */}
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+        <ExportBar filtros={filtros} pagina={pagina} />
+        {textoAtualizacao && (
+          <Chip
+            icon={<AccessTimeIcon fontSize="small" />}
+            label={textoAtualizacao}
+            size="small"
+            variant="outlined"
+            sx={{ fontSize: 11, color: "text.secondary", borderColor: "grey.300" }}
+          />
+        )}
+      </Box>
+
       <Divider sx={{ my: 2 }} />
       {aviso && (
         <Alert severity={aviso.severity} sx={{ mb: 2 }} onClose={() => setAviso(null)}>

@@ -87,7 +87,7 @@ const getCombustiveis = async (req, res) => {
         data.conteudo = ordenarRegistros(data.conteudo, ordenarPor);
       }
 
-      return res.json({ ...data, fonte: 'sefaz' });
+      return res.json({ ...data, fonte: 'sefaz', ultimaAtualizacao: null });
     }
 
     const precosRaw = await prisma.preco.findMany({
@@ -99,8 +99,14 @@ const getCombustiveis = async (req, res) => {
       orderBy: { dataVenda: 'desc' },
     });
 
+    // Última atualização deste município+tipo (createdAt do registro mais recente)
+    const ultimaAtualizacao = await prisma.preco.findFirst({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
     // Deduplica por CNPJ — mantém apenas o registro mais recente por posto
-    // (resolve casos onde o mesmo posto tem produtos com códigos diferentes mas mesmo tipo)
     const vistos = new Set();
     const precosMaisRecentes = precosRaw.filter((p) => {
       const chave = p.posto.cnpj;
@@ -125,6 +131,7 @@ const getCombustiveis = async (req, res) => {
       totalPaginas: Math.ceil(totalDeduplicado / registrosPorPagina),
       totalRegistros: totalDeduplicado,
       fonte: 'banco',
+      ultimaAtualizacao: ultimaAtualizacao?.createdAt || null,
     });
 
   } catch (error) {

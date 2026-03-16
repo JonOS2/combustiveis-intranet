@@ -11,3 +11,18 @@ body {
   background-image: radial-gradient(circle, #E02F52 0%, #C4D2DE 30%, #294D80);
   background-attachment: fixed;
 }
+
+/*background-color: #083f88;*/
+
+/*div.watermark {
+    background-image: url("../img/governo-alagoas.png");
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    background-size: contain;
+    box-sizing: border-box;
+    position: absolute;
+    opacity: 0.03;
+    top: 2%;
+    width: 100%;
+    height: 95%;
+}*/

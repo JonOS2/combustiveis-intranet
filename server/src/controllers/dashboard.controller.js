@@ -18,7 +18,7 @@ const getDashboard = async (req, res) => {
       posto: { municipio: { codigoIBGE } },
     });
 
-    const [precosHoje, precos30dias, precosPorBandeira, precosPorMunicipio, precosPorBairro] = await Promise.all([
+    const [precosHoje, precos30dias, precosPorBandeira, precosPorMunicipio, precosPorBairro, indiceEtanol] = await Promise.all([
       prisma.preco.findMany({
         where: where(1),
         include: { posto: { include: { municipio: true } }, combustivel: true },
@@ -77,6 +77,32 @@ const getDashboard = async (req, res) => {
         ORDER BY postos DESC
         LIMIT 12
       `,
+
+      // Índice etanol/gasolina — postos que vendem os dois tipos
+      // Só faz sentido quando o filtro é gasolina comum (tipo 1) ou etanol (tipo 3)
+      prisma.$queryRaw`
+        SELECT
+          po.id,
+          po."nomeFantasia",
+          po."razaoSocial",
+          po.bairro,
+          MAX(CASE WHEN c.tipo = 1 THEN pr."valorDeclarado" END) as gasolina,
+          MAX(CASE WHEN c.tipo = 3 THEN pr."valorDeclarado" END) as etanol
+        FROM "Preco" pr
+        JOIN "Posto" po ON po.id = pr."postoId"
+        JOIN "Municipio" m ON m.id = po."municipioId"
+        JOIN "Combustivel" c ON c.id = pr."combustivelId"
+        WHERE pr."dataVenda" >= ${diasAtras(1)}
+          AND c.tipo IN (1, 3)
+          AND m."codigoIBGE" = ${codigoIBGE}
+        GROUP BY po.id, po."nomeFantasia", po."razaoSocial", po.bairro
+        HAVING
+          MAX(CASE WHEN c.tipo = 1 THEN pr."valorDeclarado" END) IS NOT NULL
+          AND MAX(CASE WHEN c.tipo = 3 THEN pr."valorDeclarado" END) IS NOT NULL
+        ORDER BY (MAX(CASE WHEN c.tipo = 3 THEN pr."valorDeclarado" END) /
+                  MAX(CASE WHEN c.tipo = 1 THEN pr."valorDeclarado" END)) ASC
+        LIMIT 20
+      `,
     ]);
 
     // Se não tem dados hoje, busca últimos 7 dias
@@ -90,7 +116,6 @@ const getDashboard = async (req, res) => {
     }
 
     // Deduplica por CNPJ — mantém apenas o registro mais recente por posto
-    // (mesmo critério da pesquisa — resolve postos com múltiplos produtos cadastrados)
     const vistos = new Set();
     const precosDeduplicated = precosBase
       .filter((p) => {
@@ -144,6 +169,21 @@ const getDashboard = async (req, res) => {
     const postosAcimaMedia = valores.filter(v => v > mediaAtual).length;
     const percentualAcimaMedia = valores.length ? (postosAcimaMedia / valores.length) * 100 : 0;
 
+    // Formata índice etanol/gasolina
+    const indiceEtanolFormatado = indiceEtanol.map(p => {
+      const gasolina = parseFloat(p.gasolina);
+      const etanol = parseFloat(p.etanol);
+      const indice = etanol / gasolina;
+      return {
+        posto: p.nomeFantasia || p.razaoSocial || '—',
+        bairro: p.bairro || '—',
+        gasolina: parseFloat(gasolina.toFixed(3)),
+        etanol: parseFloat(etanol.toFixed(3)),
+        indice: parseFloat((indice * 100).toFixed(1)), // em %
+        valeEtanol: indice <= 0.7,
+      };
+    });
+
     res.json({
       metricas: {
         mediaAtual,
@@ -179,6 +219,7 @@ const getDashboard = async (req, res) => {
         media: parseFloat(parseFloat(b.media).toFixed(3)),
       })),
       histograma,
+      indiceEtanol: indiceEtanolFormatado,
     });
 
   } catch (error) {

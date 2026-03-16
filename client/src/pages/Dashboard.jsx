@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Box, Grid, Typography, Paper, Select, MenuItem,
-  FormControl, InputLabel, CircularProgress, Alert, Chip,
+  Box, Grid, Typography, Paper, Chip, CircularProgress, Alert,
 } from "@mui/material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
@@ -12,8 +11,6 @@ import {
   Cell, ReferenceLine,
 } from "recharts";
 import api from "../api/combustivel";
-import { TIPOS_COMBUSTIVEL } from "../constants/combustiveis";
-import MUNICIPIOS from "../constants/municipios";
 
 const fmt = (v) =>
   v != null ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
@@ -22,6 +19,13 @@ const fmtPct = (v) =>
   v != null ? `${v > 0 ? "+" : ""}${v.toFixed(2)}%` : "—";
 
 const CORES = ["#294D80", "#E02F52", "#4CAF50", "#FF9800", "#9C27B0", "#00BCD4", "#C4D2DE"];
+
+// Cor baseada no índice etanol/gasolina
+const corIndice = (indice) => {
+  if (indice <= 70) return "#2e7d32"; // verde — vale etanol
+  if (indice <= 75) return "#f57c00"; // laranja — zona cinza
+  return "#c62828";                   // vermelho — não vale
+};
 
 function MetricCard({ titulo, valor, subtitulo, tendencia, chip }) {
   const icone =
@@ -62,9 +66,23 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-export default function Dashboard() {
-  const [tipoCombustivel, setTipoCombustivel] = useState(1);
-  const [codigoIBGE, setCodigoIBGE] = useState(2704302);
+function TooltipIndice({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <Paper elevation={3} sx={{ p: 1.5, fontSize: 13, minWidth: 180 }}>
+      <Typography variant="caption" fontWeight={700} display="block">{d.posto}</Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>{d.bairro}</Typography>
+      <Box>Gasolina: {fmt(d.gasolina)}</Box>
+      <Box>Etanol: {fmt(d.etanol)}</Box>
+      <Box fontWeight={700} sx={{ color: corIndice(d.indice), mt: 0.5 }}>
+        Índice: {d.indice}% {d.indice <= 70 ? "✓ vale etanol" : d.indice <= 75 ? "⚠ zona cinza" : "✗ não vale"}
+      </Box>
+    </Paper>
+  );
+}
+
+export default function Dashboard({ tipoCombustivel = 1, codigoIBGE = 2704302 }) {
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState(null);
@@ -85,29 +103,10 @@ export default function Dashboard() {
   useEffect(() => { buscar(); }, [buscar]);
 
   const m = dados?.metricas;
+  const temIndice = dados?.indiceEtanol?.length > 0;
 
   return (
     <Box>
-      {/* FILTROS */}
-      <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap" }}>
-        <FormControl size="small" sx={{ minWidth: 180 }}>
-          <InputLabel>Combustível</InputLabel>
-          <Select value={tipoCombustivel} label="Combustível" onChange={(e) => setTipoCombustivel(e.target.value)}>
-            {TIPOS_COMBUSTIVEL.map((t) => (
-              <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>Município</InputLabel>
-          <Select value={codigoIBGE} label="Município" onChange={(e) => setCodigoIBGE(Number(e.target.value))}>
-            {MUNICIPIOS.map((mun) => (
-              <MenuItem key={mun.ibge} value={mun.ibge}>{mun.nome}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
-
       {loading && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
           <CircularProgress />
@@ -117,7 +116,7 @@ export default function Dashboard() {
 
       {!loading && dados && (
         <>
-          {/* CARDS */}
+          {/* CARDS MÉTRICAS */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
             {[
               { titulo: "Menor Preço", valor: fmt(m.menorPreco), subtitulo: "preço mais baixo hoje" },
@@ -158,83 +157,91 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </Paper>
 
-          {/* 3 COLUNAS IGUAIS */}
+          {/* 3 COLUNAS */}
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, mb: 3 }}>
 
-            {/* TOP 10 */}
-              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3}}>
-                <Typography variant="subtitle1" fontWeight={700}>Top 10 Menores Preços</Typography>
-                <Typography variant="caption" color="text.secondary">linha vermelha = média atual</Typography>
+            {/* ÍNDICE ETANOL/GASOLINA */}
+            <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3 }}>
+              <Typography variant="subtitle1" fontWeight={700}>Índice Etanol / Gasolina</Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+                <Typography variant="caption" sx={{ color: "#2e7d32", fontWeight: 600 }}>■ ≤70% vale</Typography>
+                <Typography variant="caption" sx={{ color: "#f57c00", fontWeight: 600 }}>■ 70-75% cinza</Typography>
+                <Typography variant="caption" sx={{ color: "#c62828", fontWeight: 600 }}>■ &gt;75% não vale</Typography>
+              </Box>
+              {!temIndice ? (
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: 260 }}>
+                  <Typography variant="body2" color="text.secondary" textAlign="center">
+                    Sem dados suficientes.<br />Requer gasolina e etanol no mesmo município.
+                  </Typography>
+                </Box>
+              ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={dados.top10} layout="vertical" margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+                  <BarChart data={dados.indiceEtanol} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} domain={[50, 90]} />
                     <YAxis type="category" dataKey="posto" tick={{ fontSize: 9 }} width={110}
-                      tickFormatter={(v) => v.length > 15 ? v.slice(0, 15) + "…" : v} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <ReferenceLine x={m.mediaAtual} stroke="#E02F52" strokeDasharray="4 2"
-                      label={{ value: "Média", position: "insideTopRight", fontSize: 9, fill: "#E02F52" }} />
-                    <Bar dataKey="valorDeclarado" name="Preço declarado" radius={[0, 4, 4, 0]}>
-                      {dados.top10.map((entry, i) => (
-                        <Cell key={i} fill={entry.valorDeclarado <= m.mediaAtual ? "#4CAF50" : "#294D80"} />
+                      tickFormatter={(v) => v.length > 15 ? v.slice(0, 12) + "…" : v} />
+                    <RechartsTooltip content={<TooltipIndice />} />
+                    <ReferenceLine x={70} stroke="#2e7d32" strokeDasharray="4 2" label={{ value: "70%", position: "top", fontSize: 10, fill: "#2e7d32" }} />
+                    <ReferenceLine x={75} stroke="#c62828" strokeDasharray="4 2" label={{ value: "75%", position: "top", fontSize: 10, fill: "#c62828" }} />
+                    <Bar dataKey="indice" name="Índice" radius={[0, 4, 4, 0]}>
+                      {dados.indiceEtanol.map((entry, i) => (
+                        <Cell key={i} fill={corIndice(entry.indice)} />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </Paper>
+              )}
+            </Paper>
 
             {/* MÉDIA POR BANDEIRA */}
-              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3}}>
-                <Typography variant="subtitle1" fontWeight={700}>Média por Bandeira</Typography>
-                <Typography variant="caption" color="text.secondary">últimos 7 dias</Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={dados.porBandeira} margin={{ top: 8, right: 8, bottom: 55, left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="bandeira" tick={{ fontSize: 9, angle: -40, textAnchor: "end" }}
-                      tickFormatter={(v) => v.length > 10 ? v.slice(0, 10) + "…" : v} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar dataKey="media" name="Média de preço" radius={[4, 4, 0, 0]}>
-                      {dados.porBandeira.map((_, i) => (
-                        <Cell key={i} fill={CORES[i % CORES.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </Paper>
+            <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3 }}>
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>Média por Bandeira</Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={dados.porBandeira} margin={{ top: 8, right: 8, bottom: 60, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="bandeira" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
+                  <RechartsTooltip formatter={(v, n, p) => [fmt(v), `${p.payload.total} postos`]} />
+                  <Bar dataKey="media" name="Média" radius={[4, 4, 0, 0]}>
+                    {dados.porBandeira.map((_, i) => (
+                      <Cell key={i} fill={CORES[i % CORES.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Paper>
 
-            {/* 10 MUNICÍPIOS */}
-              <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3}}>
-                <Typography variant="subtitle1" fontWeight={700}>10 Municípios Mais Baratos</Typography>
-                <Typography variant="caption" color="text.secondary">média dos últimos 7 dias — mín. 2 postos</Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={dados.porMunicipio} layout="vertical" margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
-                    <YAxis type="category" dataKey="municipio" tick={{ fontSize: 9 }} width={110}
-                      tickFormatter={(v) => v.length > 15 ? v.slice(0, 15) + "…" : v} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar dataKey="media" name="Média" radius={[0, 4, 4, 0]}>
-                      {dados.porMunicipio.map((_, i) => (
-                        <Cell key={i} fill={CORES[i % CORES.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </Paper>
-
+            {/* MUNICÍPIOS MAIS BARATOS */}
+            <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3 }}>
+              <Typography variant="subtitle1" fontWeight={700}>10 Municípios Mais Baratos</Typography>
+              <Typography variant="caption" color="text.secondary">média dos últimos 7 dias</Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={dados.porMunicipio} layout="vertical" margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
+                  <YAxis type="category" dataKey="municipio" tick={{ fontSize: 9 }} width={110}
+                    tickFormatter={(v) => v.length > 15 ? v.slice(0, 12) + "…" : v} />
+                  <RechartsTooltip formatter={(v, n, p) => [fmt(v), `${p.payload.postos} postos`]} />
+                  <Bar dataKey="media" name="Média" radius={[0, 4, 4, 0]}>
+                    {dados.porMunicipio.map((_, i) => (
+                      <Cell key={i} fill={CORES[i % CORES.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Paper>
           </Box>
 
-          {/* POSTOS POR BAIRRO — linha cheia */}
+          {/* POSTOS POR BAIRRO */}
           <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, mb: 3 }}>
-            <Typography variant="subtitle1" fontWeight={700}>Postos por Bairro</Typography>
-            <Typography variant="caption" color="text.secondary">
-              top 12 bairros — barras escuras = quantidade de postos (esq.) | barras claras = média de preço (dir.)
+            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+              Postos por Bairro — concentração e preço médio
             </Typography>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={dados.porBairro} margin={{ top: 10, right: 50, bottom: 55, left: 10 }}>
+              <BarChart data={dados.porBairro} margin={{ top: 5, right: 20, bottom: 60, left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="bairro" tick={{ fontSize: 10, angle: -40, textAnchor: "end" }}
+                <XAxis dataKey="bairro" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0}
                   tickFormatter={(v) => v.length > 12 ? v.slice(0, 12) + "…" : v} />
                 <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} />
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }}
@@ -251,7 +258,7 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </Paper>
 
-          {/* DISTRIBUIÇÃO — linha cheia */}
+          {/* DISTRIBUIÇÃO */}
           <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, mb: 3 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
               Distribuição de Preços — quantos postos por faixa
@@ -287,13 +294,15 @@ export default function Dashboard() {
                       <td style={{ padding: "8px 6px", color: "#999" }}>{i + 1}</td>
                       <td style={{ padding: "8px 6px", fontWeight: 500 }}>{p.posto}</td>
                       <td style={{ padding: "8px 6px", color: "#666" }}>{p.bairro || "—"}</td>
-                      <td style={{ padding: "8px 6px" }}>
-                        {p.bandeira ? <Chip label={p.bandeira} size="small" variant="outlined" color="secondary" /> : "—"}
+                      <td style={{ padding: "8px 6px"}}>
+                        {p.bandeira
+                          ? <Chip label={p.bandeira} size="small" variant="outlined" sx={{ fontSize: 11 }} />
+                          : <span style={{ color: "#999" }}>—</span>}
                       </td>
-                      <td style={{ padding: "8px 6px", color: p.valorDeclarado <= m.mediaAtual ? "#4CAF50" : "#E02F52", fontWeight: 600 }}>
+                      <td style={{ padding: "8px 6px", fontWeight: 700, color: p.valorDeclarado < m.mediaAtual ? "#2e7d32" : "#c62828" }}>
                         {fmt(p.valorDeclarado)}
                       </td>
-                      <td style={{ padding: "8px 6px" }}>{fmt(p.valorVenda)}</td>
+                      <td style={{ padding: "8px 6px", color: "#666" }}>{fmt(p.valorVenda)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -93,7 +93,6 @@ const getCombustiveis = async (req, res) => {
       select: { createdAt: true },
     });
 
-    // Deduplica por CNPJ
     const vistos = new Set();
     const precosMaisRecentes = precosRaw.filter((p) => {
       const chave = p.posto.cnpj;
@@ -102,14 +101,9 @@ const getCombustiveis = async (req, res) => {
       return true;
     });
 
-    // Busca preço anterior para calcular variação
     const postoIds = precosMaisRecentes.map(p => p.postoId);
     const precosAnteriores = await prisma.preco.findMany({
-      where: {
-        postoId: { in: postoIds },
-        combustivel: { tipo: tipoBanco },
-        dataVenda: { lt: dataLimite },
-      },
+      where: { postoId: { in: postoIds }, combustivel: { tipo: tipoBanco }, dataVenda: { lt: dataLimite } },
       orderBy: { dataVenda: 'desc' },
       select: { postoId: true, valorDeclarado: true },
     });
@@ -160,6 +154,107 @@ const getCombustiveis = async (req, res) => {
 };
 
 /* =========================
+   MAPA DE POSTOS
+   GET /api/combustivel/mapa?tipoCombustivel=1&codigoIBGE=2704302
+========================= */
+const getMapaPostos = async (req, res) => {
+  try {
+    const tipoCombustivel = parseInt(req.query.tipoCombustivel) || 1;
+    const codigoIBGE = parseInt(req.query.codigoIBGE) || 2704302;
+    const tipoBanco = resolverTipoParaSefaz(tipoCombustivel);
+
+    const dataLimite = new Date();
+    dataLimite.setDate(dataLimite.getDate() - 7);
+
+    // Busca postos com coordenadas válidas + preço recente
+    const precosRaw = await prisma.preco.findMany({
+      where: {
+        dataVenda: { gte: dataLimite },
+        combustivel: { tipo: tipoBanco },
+        posto: {
+          municipio: { codigoIBGE },
+          latitude: { not: null, gt: 0 },
+          longitude: { not: null, lt: 0 }, // longitude em AL é negativa
+        },
+      },
+      include: { posto: { include: { municipio: true } }, combustivel: true },
+      orderBy: { dataVenda: 'desc' },
+    });
+
+    // Deduplica por CNPJ
+    const vistos = new Set();
+    const deduplicados = precosRaw.filter((p) => {
+      if (vistos.has(p.posto.cnpj)) return false;
+      vistos.add(p.posto.cnpj);
+      return true;
+    });
+
+    // Filtra tipo aditivado/comum
+    const formatados = deduplicados.map(p => ({
+      cnpj: p.posto.cnpj,
+      nome: p.posto.nomeFantasia || p.posto.razaoSocial,
+      bandeira: p.posto.bandeira,
+      bairro: p.posto.bairro,
+      endereco: `${p.posto.endereco || ''}, ${p.posto.numero || ''}`.trim().replace(/,$/, ''),
+      latitude: p.posto.latitude,
+      longitude: p.posto.longitude,
+      valorDeclarado: p.valorDeclarado,
+      valorVenda: p.valorVenda,
+      dataVenda: p.dataVenda,
+      descricao: p.combustivel.descricao,
+    }));
+
+    const filtrados = formatados.filter(p => {
+      if (tipoCombustivel === 7) return p.descricao?.toUpperCase().includes('ADIT');
+      if (tipoCombustivel === 5) return !p.descricao?.toUpperCase().includes('ADIT');
+      return true;
+    });
+
+    // Calcula centróide do conjunto de postos para usar como centro do raio
+    // (mais preciso que um ponto fixo por município)
+    const comCoords = filtrados.filter(p => p.latitude && p.longitude);
+    const centroLat = comCoords.reduce((s, p) => s + p.latitude, 0) / (comCoords.length || 1);
+    const centroLon = comCoords.reduce((s, p) => s + p.longitude, 0) / (comCoords.length || 1);
+
+    // Filtro de raio — distância Haversine em km
+    const RAIO_MAX_KM = 50;
+    const toRad = (deg) => (deg * Math.PI) / 180;
+    const haversine = (lat1, lon1, lat2, lon2) => {
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    const dentroDoRaio = filtrados.filter(p =>
+      haversine(centroLat, centroLon, p.latitude, p.longitude) <= RAIO_MAX_KM
+    );
+
+    // Calcula min/max para colorir os pins
+    const valores = dentroDoRaio.map(p => p.valorDeclarado).filter(Boolean);
+    const minPreco = valores.length ? Math.min(...valores) : 0;
+    const maxPreco = valores.length ? Math.max(...valores) : 0;
+    const mediaPreco = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : 0;
+
+    res.json({
+      postos: dentroDoRaio,
+      stats: {
+        minPreco: parseFloat(minPreco.toFixed(3)),
+        maxPreco: parseFloat(maxPreco.toFixed(3)),
+        mediaPreco: parseFloat(mediaPreco.toFixed(3)),
+        total: dentroDoRaio.length,
+      },
+    });
+
+  } catch (error) {
+    console.error('❌ Erro getMapaPostos:', error.message);
+    res.status(500).json({ error: 'Erro ao buscar dados do mapa.' });
+  }
+};
+
+/* =========================
    HISTÓRICO DE PREÇO POR POSTO
    GET /api/combustivel/historico/:cnpj?tipoCombustivel=1
 ========================= */
@@ -188,7 +283,6 @@ const getHistorico = async (req, res) => {
       orderBy: { dataVenda: 'asc' },
     });
 
-    // Um registro por dia (mais recente do dia)
     const porData = new Map();
     for (const p of [...precos].reverse()) {
       const data = new Date(p.dataVenda).toISOString().split('T')[0];
@@ -220,7 +314,6 @@ const getHistorico = async (req, res) => {
 
 /* =========================
    EXPORTAR EXCEL
-   POST /api/combustivel/excel
 ========================= */
 const exportarExcel = async (req, res) => {
   try {
@@ -238,7 +331,6 @@ const exportarExcel = async (req, res) => {
 
 /* =========================
    SYNC MANUAL
-   POST /api/combustivel/sync
 ========================= */
 const syncManual = async (req, res) => {
   try {
@@ -252,7 +344,6 @@ const syncManual = async (req, res) => {
 
 /* =========================
    STATUS DO SISTEMA
-   GET /api/combustivel/status
 ========================= */
 const getStatus = async (req, res) => {
   try {
@@ -274,4 +365,4 @@ const getStatus = async (req, res) => {
   }
 };
 
-module.exports = { getCombustiveis, getHistorico, exportarExcel, syncManual, getStatus };
+module.exports = { getCombustiveis, getMapaPostos, getHistorico, exportarExcel, syncManual, getStatus };

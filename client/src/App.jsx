@@ -8,6 +8,7 @@ import LocalGasStationIcon from "@mui/icons-material/LocalGasStation";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import SearchIcon from "@mui/icons-material/Search";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import MapIcon from "@mui/icons-material/Map";
 
 import api from "./api/combustivel";
 import { FILTROS_INICIAIS, TIPOS_COMBUSTIVEL } from "./constants/combustiveis";
@@ -17,6 +18,7 @@ import ExportBar from "./components/ExportBar";
 import ListaPostos from "./components/ListaPostos";
 import StatusModal from "./components/StatusModal";
 import Dashboard from "./pages/Dashboard";
+import MapaPostos from "./pages/MapaPostos";
 
 const normalizar = (texto = "") =>
   texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -35,9 +37,10 @@ const formatarUltimaAtualizacao = (iso) => {
 
 export default function App() {
   const location = useLocation();
-  const tabValue = location.pathname === "/dashboard" ? 1 : 0;
+  const tabValue = location.pathname === "/dashboard" ? 1 : location.pathname === "/mapa" ? 2 : 0;
   const isPesquisa = location.pathname === "/";
   const isDashboard = location.pathname === "/dashboard";
+  const isMapa = location.pathname === "/mapa";
 
   // ── Estado pesquisa ──────────────────────────────────────
   const [loading, setLoading] = useState(false);
@@ -135,6 +138,7 @@ export default function App() {
         <Tabs value={tabValue} sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
           <Tab icon={<SearchIcon fontSize="small" />} iconPosition="start" label="Pesquisa" component={NavLink} to="/" />
           <Tab icon={<BarChartIcon fontSize="small" />} iconPosition="start" label="Dashboard" component={NavLink} to="/dashboard" />
+          <Tab icon={<MapIcon fontSize="small" />} iconPosition="start" label="Mapa" component={NavLink} to="/mapa" />
         </Tabs>
 
         {/* FILTROS PESQUISA — dentro do card */}
@@ -169,29 +173,23 @@ export default function App() {
         {/* FILTROS DASHBOARD — dentro do card */}
         {isDashboard && (
           <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-            <TextField
-              select
-              label="Combustível"
-              size="small"
-              sx={{ minWidth: 180 }}
-              value={dashTipo}
-              onChange={(e) => setDashTipo(e.target.value)}
-            >
-              {TIPOS_COMBUSTIVEL.map((t) => (
-                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
-              ))}
+            <TextField select label="Combustível" size="small" sx={{ minWidth: 180 }} value={dashTipo} onChange={(e) => setDashTipo(e.target.value)}>
+              {TIPOS_COMBUSTIVEL.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
             </TextField>
-            <TextField
-              select
-              label="Município"
-              size="small"
-              sx={{ minWidth: 200 }}
-              value={dashIBGE}
-              onChange={(e) => setDashIBGE(Number(e.target.value))}
-            >
-              {MUNICIPIOS.map((m) => (
-                <MenuItem key={m.ibge} value={m.ibge}>{m.nome}</MenuItem>
-              ))}
+            <TextField select label="Município" size="small" sx={{ minWidth: 200 }} value={dashIBGE} onChange={(e) => setDashIBGE(Number(e.target.value))}>
+              {MUNICIPIOS.map((m) => <MenuItem key={m.ibge} value={m.ibge}>{m.nome}</MenuItem>)}
+            </TextField>
+          </Box>
+        )}
+
+        {/* FILTROS MAPA — dentro do card */}
+        {isMapa && (
+          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+            <TextField select label="Combustível" size="small" sx={{ minWidth: 180 }} value={dashTipo} onChange={(e) => setDashTipo(e.target.value)}>
+              {TIPOS_COMBUSTIVEL.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+            </TextField>
+            <TextField select label="Município" size="small" sx={{ minWidth: 200 }} value={dashIBGE} onChange={(e) => setDashIBGE(Number(e.target.value))}>
+              {MUNICIPIOS.map((m) => <MenuItem key={m.ibge} value={m.ibge}>{m.nome}</MenuItem>)}
             </TextField>
           </Box>
         )}
@@ -223,6 +221,10 @@ export default function App() {
         <Route
           path="/dashboard"
           element={<Dashboard tipoCombustivel={dashTipo} codigoIBGE={dashIBGE} />}
+        />
+        <Route
+          path="/mapa"
+          element={<MapaPostos tipoCombustivel={dashTipo} codigoIBGE={dashIBGE} />}
         />
       </Routes>
     </Container>

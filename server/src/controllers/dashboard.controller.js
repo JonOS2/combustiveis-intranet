@@ -18,7 +18,15 @@ const getDashboard = async (req, res) => {
       posto: { municipio: { codigoIBGE } },
     });
 
-    const [precosHoje, precos30dias, precosPorBandeira, precosPorMunicipio, precosPorBairro, indiceEtanol] = await Promise.all([
+    const [
+      precosHoje,
+      precos30dias,
+      precosPorBandeira,
+      precosPorMunicipio,
+      precosPorBairro,
+      indiceEtanol,
+      comparativo30dias,
+    ] = await Promise.all([
       prisma.preco.findMany({
         where: where(1),
         include: { posto: { include: { municipio: true } }, combustivel: true },
@@ -78,8 +86,6 @@ const getDashboard = async (req, res) => {
         LIMIT 12
       `,
 
-      // Índice etanol/gasolina — postos que vendem os dois tipos
-      // Só faz sentido quando o filtro é gasolina comum (tipo 1) ou etanol (tipo 3)
       prisma.$queryRaw`
         SELECT
           po.id,
@@ -103,6 +109,24 @@ const getDashboard = async (req, res) => {
                   MAX(CASE WHEN c.tipo = 1 THEN pr."valorDeclarado" END)) ASC
         LIMIT 20
       `,
+
+      // Comparativo 30 dias — média diária de gasolina, etanol e diesel S10
+      prisma.$queryRaw`
+        SELECT
+          pr."dataVenda",
+          AVG(CASE WHEN c.tipo = 1 THEN pr."valorDeclarado" END) as gasolina,
+          AVG(CASE WHEN c.tipo = 3 THEN pr."valorDeclarado" END) as etanol,
+          AVG(CASE WHEN c.tipo = 5 THEN pr."valorDeclarado" END) as diesel
+        FROM "Preco" pr
+        JOIN "Posto" po ON po.id = pr."postoId"
+        JOIN "Municipio" m ON m.id = po."municipioId"
+        JOIN "Combustivel" c ON c.id = pr."combustivelId"
+        WHERE pr."dataVenda" >= ${diasAtras(30)}
+          AND c.tipo IN (1, 3, 5)
+          AND m."codigoIBGE" = ${codigoIBGE}
+        GROUP BY pr."dataVenda"
+        ORDER BY pr."dataVenda" ASC
+      `,
     ]);
 
     // Se não tem dados hoje, busca últimos 7 dias
@@ -115,7 +139,7 @@ const getDashboard = async (req, res) => {
       });
     }
 
-    // Deduplica por CNPJ — mantém apenas o registro mais recente por posto
+    // Deduplica por CNPJ
     const vistos = new Set();
     const precosDeduplicated = precosBase
       .filter((p) => {
@@ -169,7 +193,6 @@ const getDashboard = async (req, res) => {
     const postosAcimaMedia = valores.filter(v => v > mediaAtual).length;
     const percentualAcimaMedia = valores.length ? (postosAcimaMedia / valores.length) * 100 : 0;
 
-    // Formata índice etanol/gasolina
     const indiceEtanolFormatado = indiceEtanol.map(p => {
       const gasolina = parseFloat(p.gasolina);
       const etanol = parseFloat(p.etanol);
@@ -179,21 +202,25 @@ const getDashboard = async (req, res) => {
         bairro: p.bairro || '—',
         gasolina: parseFloat(gasolina.toFixed(3)),
         etanol: parseFloat(etanol.toFixed(3)),
-        indice: parseFloat((indice * 100).toFixed(1)), // em %
+        indice: parseFloat((indice * 100).toFixed(1)),
         valeEtanol: indice <= 0.7,
       };
     });
 
+    // Formata comparativo — null quando não há dados para aquele tipo naquele dia
+    const comparativoFormatado = comparativo30dias.map(d => ({
+      data: new Date(d.dataVenda).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      gasolina: d.gasolina != null ? parseFloat(parseFloat(d.gasolina).toFixed(3)) : null,
+      etanol: d.etanol != null ? parseFloat(parseFloat(d.etanol).toFixed(3)) : null,
+      diesel: d.diesel != null ? parseFloat(parseFloat(d.diesel).toFixed(3)) : null,
+    }));
+
     res.json({
       metricas: {
-        mediaAtual,
-        mediaSemanaAnterior,
-        variacaoMedia,
-        menorPreco,
-        maiorPreco,
+        mediaAtual, mediaSemanaAnterior, variacaoMedia,
+        menorPreco, maiorPreco,
         totalPostos: precosDeduplicated.length,
-        postosAcimaMedia,
-        percentualAcimaMedia,
+        postosAcimaMedia, percentualAcimaMedia,
       },
       top10,
       historico: precos30dias.map(d => ({
@@ -220,6 +247,7 @@ const getDashboard = async (req, res) => {
       })),
       histograma,
       indiceEtanol: indiceEtanolFormatado,
+      comparativo: comparativoFormatado,
     });
 
   } catch (error) {

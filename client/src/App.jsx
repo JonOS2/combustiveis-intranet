@@ -216,6 +216,7 @@ export default function App() {
               totalPaginas={totalPaginas}
               filtroAtivo={filtroAtivo}
               onPageChange={buscar}
+              tipoCombustivel={filtros.tipoCombustivel}
             />
           }
         />

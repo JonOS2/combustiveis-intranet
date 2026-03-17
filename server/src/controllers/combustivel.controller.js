@@ -72,41 +72,28 @@ const getCombustiveis = async (req, res) => {
 
     if (total === 0) {
       console.warn(`⚠️  Banco vazio para IBGE ${codigoIBGE} tipo ${tipoCombustivel} — usando API SEFAZ`);
-
-      const data = await buscarPagina({
-        tipoCombustivel: tipoBanco,
-        dias,
-        codigoIBGE,
-        pagina,
-        registrosPorPagina,
-      });
-
+      const data = await buscarPagina({ tipoCombustivel: tipoBanco, dias, codigoIBGE, pagina, registrosPorPagina });
       if (Array.isArray(data?.conteudo)) {
         await enriquecerComBandeiras(data.conteudo);
         data.conteudo = filtrarPorTipo(data.conteudo, tipoCombustivel);
         data.conteudo = ordenarRegistros(data.conteudo, ordenarPor);
       }
-
       return res.json({ ...data, fonte: 'sefaz', ultimaAtualizacao: null });
     }
 
     const precosRaw = await prisma.preco.findMany({
       where,
-      include: {
-        posto: { include: { municipio: true } },
-        combustivel: true,
-      },
+      include: { posto: { include: { municipio: true } }, combustivel: true },
       orderBy: { dataVenda: 'desc' },
     });
 
-    // Última atualização deste município+tipo
     const ultimaAtualizacao = await prisma.preco.findFirst({
       where,
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
 
-    // Deduplica por CNPJ — mantém apenas o registro mais recente por posto
+    // Deduplica por CNPJ
     const vistos = new Set();
     const precosMaisRecentes = precosRaw.filter((p) => {
       const chave = p.posto.cnpj;
@@ -115,7 +102,7 @@ const getCombustiveis = async (req, res) => {
       return true;
     });
 
-    // Busca preço anterior de cada posto (penúltimo registro antes do período atual)
+    // Busca preço anterior para calcular variação
     const postoIds = precosMaisRecentes.map(p => p.postoId);
     const precosAnteriores = await prisma.preco.findMany({
       where: {
@@ -124,15 +111,11 @@ const getCombustiveis = async (req, res) => {
         dataVenda: { lt: dataLimite },
       },
       orderBy: { dataVenda: 'desc' },
-      select: { postoId: true, valorDeclarado: true, dataVenda: true },
+      select: { postoId: true, valorDeclarado: true },
     });
-
-    // Mapa: postoId → preço anterior mais recente
     const mapaAnteriores = new Map();
     for (const p of precosAnteriores) {
-      if (!mapaAnteriores.has(p.postoId)) {
-        mapaAnteriores.set(p.postoId, p.valorDeclarado);
-      }
+      if (!mapaAnteriores.has(p.postoId)) mapaAnteriores.set(p.postoId, p.valorDeclarado);
     }
 
     const campo = ordenarPor === 'venda' ? 'valorVenda' : 'valorDeclarado';
@@ -146,19 +129,16 @@ const getCombustiveis = async (req, res) => {
       const item = formatarRegistroDoBanco(p);
       const precoAnterior = mapaAnteriores.get(p.postoId);
       const precoAtual = p.valorDeclarado;
-
       if (precoAnterior != null && precoAtual != null) {
         const diff = precoAtual - precoAnterior;
-        const pct = (diff / precoAnterior) * 100;
         item.variacao = {
           anterior: precoAnterior,
           diff: parseFloat(diff.toFixed(3)),
-          pct: parseFloat(pct.toFixed(1)),
+          pct: parseFloat(((diff / precoAnterior) * 100).toFixed(1)),
         };
       } else {
         item.variacao = null;
       }
-
       return item;
     });
 
@@ -180,24 +160,77 @@ const getCombustiveis = async (req, res) => {
 };
 
 /* =========================
+   HISTÓRICO DE PREÇO POR POSTO
+   GET /api/combustivel/historico/:cnpj?tipoCombustivel=1
+========================= */
+const getHistorico = async (req, res) => {
+  try {
+    const { cnpj } = req.params;
+    const tipoCombustivel = parseInt(req.query.tipoCombustivel) || 1;
+    const tipoBanco = resolverTipoParaSefaz(tipoCombustivel);
+
+    const dataLimite = new Date();
+    dataLimite.setDate(dataLimite.getDate() - 30);
+
+    const posto = await prisma.posto.findUnique({
+      where: { cnpj },
+      select: { id: true, nomeFantasia: true, razaoSocial: true, bairro: true, bandeira: true },
+    });
+
+    if (!posto) return res.status(404).json({ error: 'Posto não encontrado.' });
+
+    const precos = await prisma.preco.findMany({
+      where: {
+        postoId: posto.id,
+        combustivel: { tipo: tipoBanco },
+        dataVenda: { gte: dataLimite },
+      },
+      orderBy: { dataVenda: 'asc' },
+    });
+
+    // Um registro por dia (mais recente do dia)
+    const porData = new Map();
+    for (const p of [...precos].reverse()) {
+      const data = new Date(p.dataVenda).toISOString().split('T')[0];
+      if (!porData.has(data)) porData.set(data, p);
+    }
+
+    const historico = Array.from(porData.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, p]) => ({
+        data: new Date(p.dataVenda).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        declarado: p.valorDeclarado,
+        venda: p.valorVenda,
+      }));
+
+    res.json({
+      posto: {
+        nome: posto.nomeFantasia || posto.razaoSocial,
+        bairro: posto.bairro,
+        bandeira: posto.bandeira,
+      },
+      historico,
+    });
+
+  } catch (error) {
+    console.error('❌ Erro getHistorico:', error.message);
+    res.status(500).json({ error: 'Erro ao buscar histórico.' });
+  }
+};
+
+/* =========================
    EXPORTAR EXCEL
    POST /api/combustivel/excel
 ========================= */
 const exportarExcel = async (req, res) => {
   try {
     const { buffer, nomeArquivo } = await gerarExcel(req.body);
-
     res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
-
   } catch (error) {
-    if (error.message === 'EXPORTACAO_MUITO_GRANDE') {
-      return res.status(400).json({ error: 'Exportação muito grande. Refine os filtros.' });
-    }
-    if (error.message === 'SEM_DADOS') {
-      return res.status(404).json({ error: 'Nenhum dado encontrado para os filtros selecionados.' });
-    }
+    if (error.message === 'EXPORTACAO_MUITO_GRANDE') return res.status(400).json({ error: 'Exportação muito grande. Refine os filtros.' });
+    if (error.message === 'SEM_DADOS') return res.status(404).json({ error: 'Nenhum dado encontrado para os filtros selecionados.' });
     console.error('❌ Erro exportarExcel:', error.message);
     res.status(500).json({ error: 'Erro ao gerar Excel' });
   }
@@ -210,9 +243,7 @@ const exportarExcel = async (req, res) => {
 const syncManual = async (req, res) => {
   try {
     res.json({ message: 'Sincronização iniciada em background.' });
-    sincronizar().catch((err) =>
-      console.error('❌ Erro no sync manual:', err.message)
-    );
+    sincronizar().catch((err) => console.error('❌ Erro no sync manual:', err.message));
   } catch (error) {
     console.error('❌ Erro syncManual:', error.message);
     res.status(500).json({ error: 'Erro ao iniciar sincronização' });
@@ -225,30 +256,17 @@ const syncManual = async (req, res) => {
 ========================= */
 const getStatus = async (req, res) => {
   try {
-    const [
-      totalPostos,
-      totalPrecos,
-      totalMunicipios,
-      ultimoPreco,
-      postosSemBandeira,
-    ] = await Promise.all([
+    const [totalPostos, totalPrecos, totalMunicipios, ultimoPreco, postosSemBandeira] = await Promise.all([
       prisma.posto.count(),
       prisma.preco.count(),
       prisma.municipio.count(),
-      prisma.preco.findFirst({
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true, dataVenda: true },
-      }),
+      prisma.preco.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true, dataVenda: true } }),
       prisma.posto.count({ where: { bandeira: null } }),
     ]);
-
     res.json({
       ultimaSincronizacao: ultimoPreco?.createdAt || null,
       ultimaDataVenda: ultimoPreco?.dataVenda || null,
-      totalPostos,
-      totalPrecos,
-      totalMunicipios,
-      postosSemBandeira,
+      totalPostos, totalPrecos, totalMunicipios, postosSemBandeira,
     });
   } catch (error) {
     console.error('❌ Erro getStatus:', error.message);
@@ -256,4 +274,4 @@ const getStatus = async (req, res) => {
   }
 };
 
-module.exports = { getCombustiveis, exportarExcel, syncManual, getStatus };
+module.exports = { getCombustiveis, getHistorico, exportarExcel, syncManual, getStatus };

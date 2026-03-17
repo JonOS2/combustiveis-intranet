@@ -20,11 +20,10 @@ const fmtPct = (v) =>
 
 const CORES = ["#294D80", "#E02F52", "#4CAF50", "#FF9800", "#9C27B0", "#00BCD4", "#C4D2DE"];
 
-// Cor baseada no índice etanol/gasolina
 const corIndice = (indice) => {
-  if (indice <= 70) return "#2e7d32"; // verde — vale etanol
-  if (indice <= 75) return "#f57c00"; // laranja — zona cinza
-  return "#c62828";                   // vermelho — não vale
+  if (indice <= 70) return "#2e7d32";
+  if (indice <= 75) return "#f57c00";
+  return "#c62828";
 };
 
 function MetricCard({ titulo, valor, subtitulo, tendencia, chip }) {
@@ -104,6 +103,7 @@ export default function Dashboard({ tipoCombustivel = 1, codigoIBGE = 2704302 })
 
   const m = dados?.metricas;
   const temIndice = dados?.indiceEtanol?.length > 0;
+  const temComparativo = dados?.comparativo?.length > 0;
 
   return (
     <Box>
@@ -138,7 +138,7 @@ export default function Dashboard({ tipoCombustivel = 1, codigoIBGE = 2704302 })
             ))}
           </Grid>
 
-          {/* EVOLUÇÃO 30 DIAS */}
+          {/* EVOLUÇÃO 30 DIAS — combustível selecionado */}
           <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, mb: 3 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
               Evolução da Média — últimos 30 dias
@@ -155,6 +155,46 @@ export default function Dashboard({ tipoCombustivel = 1, codigoIBGE = 2704302 })
                 <Line type="monotone" dataKey="maximo" name="Máximo" stroke="#E02F52" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
               </LineChart>
             </ResponsiveContainer>
+          </Paper>
+
+          {/* COMPARATIVO ENTRE COMBUSTÍVEIS */}
+          <Paper elevation={0} sx={{ p: 2.5, border: "1px solid", borderColor: "grey.200", borderRadius: 3, mb: 3 }}>
+            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+              Comparativo entre Combustíveis — média diária (30 dias)
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Gasolina Comum · Etanol · Diesel S10 — linhas ausentes indicam sem dados no período
+            </Typography>
+            {!temComparativo ? (
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200 }}>
+                <Typography variant="body2" color="text.secondary">Sem dados suficientes para o comparativo.</Typography>
+              </Box>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={dados.comparativo} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="data" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${v.toFixed(2)}`} domain={["auto", "auto"]} />
+                  <RechartsTooltip content={<CustomTooltip />} />
+                  <Legend />
+                  <Line
+                    type="monotone" dataKey="gasolina" name="Gasolina Comum"
+                    stroke="#294D80" strokeWidth={2} dot={false}
+                    connectNulls={false}
+                  />
+                  <Line
+                    type="monotone" dataKey="etanol" name="Etanol"
+                    stroke="#4CAF50" strokeWidth={2} dot={false}
+                    connectNulls={false}
+                  />
+                  <Line
+                    type="monotone" dataKey="diesel" name="Diesel S10"
+                    stroke="#FF9800" strokeWidth={2} dot={false}
+                    connectNulls={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </Paper>
 
           {/* 3 COLUNAS */}
@@ -294,7 +334,7 @@ export default function Dashboard({ tipoCombustivel = 1, codigoIBGE = 2704302 })
                       <td style={{ padding: "8px 6px", color: "#999" }}>{i + 1}</td>
                       <td style={{ padding: "8px 6px", fontWeight: 500 }}>{p.posto}</td>
                       <td style={{ padding: "8px 6px", color: "#666" }}>{p.bairro || "—"}</td>
-                      <td style={{ padding: "8px 6px"}}>
+                      <td style={{ padding: "8px 6px" }}>
                         {p.bandeira
                           ? <Chip label={p.bandeira} size="small" variant="outlined" sx={{ fontSize: 11 }} />
                           : <span style={{ color: "#999" }}>—</span>}

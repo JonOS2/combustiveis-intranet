@@ -16,6 +16,11 @@ async function salvarRegistro(item, tipoCombustivel) {
   });
 
   // 2️⃣ Posto
+  // Só atualiza latitude/longitude se a SEFAZ retornar coordenadas válidas (não zero)
+  // Isso preserva as coordenadas enriquecidas pelo backfill-coordenadas.js
+  const coordenadasValidas = endereco.latitude && endereco.longitude &&
+    endereco.latitude !== 0 && endereco.longitude !== 0;
+
   const posto = await prisma.posto.upsert({
     where: { cnpj: estabelecimento.cnpj },
     update: {
@@ -25,11 +30,13 @@ async function salvarRegistro(item, tipoCombustivel) {
       numero:       endereco.numeroImovel,
       bairro:       endereco.bairro,
       cep:          endereco.cep,
-      latitude:     endereco.latitude,
-      longitude:    endereco.longitude,
       telefone:     estabelecimento.telefone || null,
       ...(estabelecimento.bandeira && { bandeira: estabelecimento.bandeira }),
-      municipioId:  municipio.id
+      ...(coordenadasValidas && {
+        latitude:  endereco.latitude,
+        longitude: endereco.longitude,
+      }),
+      municipioId: municipio.id
     },
     create: {
       cnpj:         estabelecimento.cnpj,
@@ -39,15 +46,15 @@ async function salvarRegistro(item, tipoCombustivel) {
       numero:       endereco.numeroImovel,
       bairro:       endereco.bairro,
       cep:          endereco.cep,
-      latitude:     endereco.latitude,
-      longitude:    endereco.longitude,
+      latitude:     coordenadasValidas ? endereco.latitude : null,
+      longitude:    coordenadasValidas ? endereco.longitude : null,
       telefone:     estabelecimento.telefone || null,
       bandeira:     estabelecimento.bandeira || null,
       municipioId:  municipio.id
     }
   });
 
-  // 3️⃣ Combustível — tipo vem como parâmetro pois a SEFAZ não o retorna no resultado
+  // 3️⃣ Combustível
   const combustivel = await prisma.combustivel.upsert({
     where: { codigo: produto.codigo },
     update: {

@@ -173,8 +173,12 @@ const getMapaPostos = async (req, res) => {
         combustivel: { tipo: tipoBanco },
         posto: {
           municipio: { codigoIBGE },
-          latitude: { not: null, gt: 0 },
-          longitude: { not: null, lt: 0 }, // longitude em AL é negativa
+          AND: [
+            {latitude: { not: null}},
+            {latitude: { gt: 0 }},
+            {longitude: { not: null }},
+            {longitude: { lt: 0 }} // longitude em AL é negativa
+          ]
         },
       },
       include: { posto: { include: { municipio: true } }, combustivel: true },

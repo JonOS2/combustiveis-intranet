@@ -54,11 +54,10 @@ export default function MapaPostos({ tipoCombustivel = 1, codigoIBGE = 2704302 }
           <Paper elevation={0} sx={{ p: 2, mb: 2, border: "1px solid", borderColor: "grey.200", borderRadius: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
               <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
-                <Typography variant="body2" fontWeight={600}>Legenda:</Typography>
                 {[
-                  { cor: "#2e7d32", label: "Barato" },
-                  { cor: "#f57c00", label: "Médio" },
-                  { cor: "#c62828", label: "Caro" },
+                  { cor: "#2e7d32", label: "Abaixo da Média" },
+                  { cor: "#f57c00", label: "Na Média" },
+                  { cor: "#c62828", label: "Acima da Média" },
                   { cor: "#9e9e9e", label: "Sem preço" },
                 ].map(({ cor, label }) => (
                   <Box key={label} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>

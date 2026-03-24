@@ -74,11 +74,11 @@ export default function PostoCard({ item, tipoCombustivel = 1 }) {
                 <Chip label={`Venda: ${formatarMoeda(produto.venda.valorVenda)}`} size="small" color="primary" variant="outlined" />
                 <Box sx={{ display: "flex", alignItems: "center" }}>
                   <Chip label={`Declarado: ${formatarMoeda(produto.venda.valorDeclarado)}`} size="small" variant="outlined" />
-                  <BadgeVariacao variacao={variacao} />
                 </Box>
                 {estabelecimento.bandeira && (
                   <Chip label={estabelecimento.bandeira} size="small" color="secondary" variant="outlined" />
                 )}
+                <BadgeVariacao variacao={variacao} />
               </Box>
             </Box>
 

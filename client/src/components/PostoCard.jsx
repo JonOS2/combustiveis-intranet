@@ -9,6 +9,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import HistoryIcon from "@mui/icons-material/History";
 import HistoricoModal from "./HistoricoModal";
+import { isCredenciado } from "../constants/credenciados";
 
 const formatarMoeda = (valor) =>
   valor != null ? valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
@@ -47,6 +48,7 @@ function BadgeVariacao({ variacao }) {
 export default function PostoCard({ item, tipoCombustivel = 1 }) {
   const { estabelecimento, produto, variacao } = item;
   const [historicoOpen, setHistoricoOpen] = useState(false);
+  const credenciado = isCredenciado(estabelecimento.cnpj);
 
   const postoNome = estabelecimento.nomeFantasia || estabelecimento.razaoSocial || "Posto sem nome";
   const endereco = estabelecimento.endereco;
@@ -78,6 +80,17 @@ export default function PostoCard({ item, tipoCombustivel = 1 }) {
                 {estabelecimento.bandeira && (
                   <Chip label={estabelecimento.bandeira} size="small" color="secondary" variant="outlined" />
                 )}
+                <Chip
+                  label={credenciado ? "Credenciado" : "Não credenciado"}
+                  size="small"
+                  sx={{
+                    fontWeight: 600,
+                    backgroundColor: credenciado ? "#e8f5e9" : "#fff3e0",
+                    color: credenciado ? "#2e7d32" : "#e65100",
+                    border: "1px solid",
+                    borderColor: credenciado ? "#a5d6a7" : "#ffcc80",
+                  }}
+                />
                 <BadgeVariacao variacao={variacao} />
               </Box>
             </Box>

@@ -6,14 +6,43 @@ const {
   ordenarRegistros
 } = require('./sefaz.service');
 
+// CNPJs credenciados — normalizados (sem pontuação)
+const CNPJS_CREDENCIADOS = new Set([
+  "33967242000370", "34073062000145", "29540082000149", "29633902000147",
+  "07783800000175", "23800197000149", "21309025000141", "17057051000152",
+  "40921967000120", "08461170000185", "01242690000239", "12451076000112",
+  "12451076000465", "01242690000158", "12486809000235", "10889582000162",
+  "07150975000145", "12204558000178", "11206098000154", "29276874000158",
+  "23768811000132", "34745647000164", "44687105000136", "24296959000184",
+  "07483858000101", "33600518000115", "17348259000120", "05518639000187",
+  "04431113000100", "33296262000102", "08422115000186", "14432556000161",
+  "05019078000171", "28742913000100", "12236184000172", "13478460000171",
+  "03705157000100", "41576958000102", "41964710000119", "32876089000140",
+  "20528778000185", "31585795000170", "08158788000170", "27665019000103",
+  "09077197000131", "60066994000170", "17336019000106", "05012787000125",
+  "08950629000104", "05760532000140", "08203497000157", "13951557000150",
+  "35362367000130", "05072232000179", "05900895000134", "11498042000110",
+  "05453620000108", "27665019000375", "02804864000191", "09609009000179",
+  "42426417000160", "27665019000294", "08801561000282", "08418303000564",
+  "50763348000109", "06964197000165", "08850457000105", "05988846000103",
+  "17303640000173", "05079209000106", "41163486000247", "16674625000179",
+  "07431049000148", "08886885000180", "39805644000192", "09423134000190",
+  "05562589000135", "40477733000136", "12275228000173", "12396339000561",
+  "12396339000308", "19034367000154", "12486809000316", "00497402000143",
+  "22590658000133", "13231916000102", "07839831000109", "20266767000174",
+  "12486809000405", "11377428000174", "08529008000232", "26362482000113",
+  "08418303000130", "08529008000151", "01332922000169", "28442466000166",
+  "11908167000171", "29709059000135", "03223071000141", "07716281000122",
+  "12396339000219", "06081417000102", "10635075000283", "06053479000100",
+  "07478815000120",
+]);
+
+const normalizarCNPJ = (cnpj) => (cnpj || '').replace(/[.\-\/]/g, '');
+const isCredenciado = (cnpj) => CNPJS_CREDENCIADOS.has(normalizarCNPJ(cnpj));
+
 const MAPA_COMBUSTIVEL = {
-  1: 'gasolina-comum',
-  2: 'gasolina-aditivada',
-  3: 'etanol',
-  4: 'diesel-comum',
-  5: 'diesel-s10',
-  6: 'gnv',
-  7: 'diesel-s10-aditivado'
+  1: 'gasolina-comum', 2: 'gasolina-aditivada', 3: 'etanol',
+  4: 'diesel-comum', 5: 'diesel-s10', 6: 'gnv', 7: 'diesel-s10-aditivado'
 };
 
 const normalizarTexto = (texto = '') =>
@@ -45,6 +74,7 @@ const gerarBufferExcel = (registros) => {
     'Valor Declarado (R$)': item.produto.venda.valorDeclarado,
     'Valor Venda (R$)': item.produto.venda.valorVenda,
     Bandeira: item.estabelecimento.bandeira || '—',
+    Credenciado: isCredenciado(item.estabelecimento.cnpj) ? 'Sim' : 'Não',
     Data: new Date(item.produto.venda.dataVenda).toLocaleDateString('pt-BR'),
     CNPJ: item.estabelecimento.cnpj,
     Telefone: item.estabelecimento.telefone || '—',
@@ -102,10 +132,6 @@ const formatarRegistroDoBanco = (preco) => ({
   },
 });
 
-/* =========================
-   BUSCA DO BANCO COM DEDUPLICAÇÃO
-   codigoIBGE = null → todos os municípios (estado)
-========================= */
 const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor }) => {
   const dataLimite = new Date();
   dataLimite.setDate(dataLimite.getDate() - dias);
@@ -120,15 +146,10 @@ const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor })
 
   const precosRaw = await prisma.preco.findMany({
     where,
-    include: {
-      posto: { include: { municipio: true } },
-      combustivel: true,
-    },
+    include: { posto: { include: { municipio: true } }, combustivel: true },
     orderBy: { dataVenda: 'desc' },
   });
 
-  // Deduplica por CNPJ — mantém apenas o registro mais recente por posto
-  // (resolve casos onde o mesmo posto tem produtos com códigos diferentes mas mesmo tipo)
   const vistos = new Set();
   const deduplicados = precosRaw.filter((p) => {
     const chave = p.posto.cnpj;
@@ -144,9 +165,6 @@ const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor })
   return registros;
 };
 
-/* =========================
-   SERVIÇO PRINCIPAL DE EXPORTAÇÃO
-========================= */
 const gerarExcel = async ({
   tipoCombustivel = 1,
   dias = 1,
@@ -159,26 +177,16 @@ const gerarExcel = async ({
   const ibgeFiltro = modo === 'estado' ? null : codigoIBGE;
   const limiteRegistros = modo === 'estado' ? 10000 : 2000;
 
-  const todosRegistros = await buscarDosBanco({
-    tipoCombustivel,
-    dias,
-    codigoIBGE: ibgeFiltro,
-    ordenarPor,
-  });
+  const todosRegistros = await buscarDosBanco({ tipoCombustivel, dias, codigoIBGE: ibgeFiltro, ordenarPor });
 
-  if (todosRegistros.length === 0) {
-    throw new Error('SEM_DADOS');
-  }
+  if (todosRegistros.length === 0) throw new Error('SEM_DADOS');
 
   let registros;
-
   if (modo === 'pagina') {
     const inicio = (pagina - 1) * registrosPorPagina;
     registros = todosRegistros.slice(inicio, inicio + registrosPorPagina);
   } else {
-    if (todosRegistros.length > limiteRegistros) {
-      throw new Error('EXPORTACAO_MUITO_GRANDE');
-    }
+    if (todosRegistros.length > limiteRegistros) throw new Error('EXPORTACAO_MUITO_GRANDE');
     registros = todosRegistros;
   }
 

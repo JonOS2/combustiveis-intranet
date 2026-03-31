@@ -3,7 +3,6 @@ import {
   TextField,
   MenuItem,
   Button,
-  InputAdornment,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import municipiosAL from "../constants/municipios";
@@ -16,12 +15,12 @@ import {
 export default function FiltrosBar({
   filtros,
   bandeiraFiltro,
-  postoFiltro,
+  credenciadoFiltro,
   bandeirasDisponiveis,
   loading,
   onFiltroChange,
   onBandeiraChange,
-  onPostoChange,
+  onCredenciadoChange,
   onBuscar,
 }) {
   const handleOrdenacaoChange = (e) => {
@@ -119,20 +118,18 @@ export default function FiltrosBar({
         ))}
       </TextField>
 
-      {/* FILTRO DE POSTO */}
+      {/* FILTRO DE CREDENCIADO */}
       <TextField
-        label="Buscar posto"
+        select
+        label="Credenciamento"
         size="small"
-        value={postoFiltro}
-        onChange={(e) => onPostoChange(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
-        }}
-      />
+        value={credenciadoFiltro}
+        onChange={(e) => onCredenciadoChange(e.target.value)}
+      >
+        <MenuItem value="">Todos</MenuItem>
+        <MenuItem value="sim">Credenciado</MenuItem>
+        <MenuItem value="nao">Não credenciado</MenuItem>
+      </TextField>
 
       {/* BOTÃO BUSCAR */}
       <Button

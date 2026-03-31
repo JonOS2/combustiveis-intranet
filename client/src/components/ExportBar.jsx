@@ -59,7 +59,7 @@ export default function ExportBar({ filtros, pagina }) {
 
   return (
     <>
-      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center" }}>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center", alignItems: "center" }}>
 
         {/* Página atual — contained verde, texto branco */}
         <Button

@@ -13,15 +13,13 @@ import MapIcon from "@mui/icons-material/Map";
 import api from "./api/combustivel";
 import { FILTROS_INICIAIS, TIPOS_COMBUSTIVEL } from "./constants/combustiveis";
 import MUNICIPIOS from "./constants/municipios";
+import { isCredenciado } from "./constants/credenciados";
 import FiltrosBar from "./components/FiltrosBar";
 import ExportBar from "./components/ExportBar";
 import ListaPostos from "./components/ListaPostos";
 import StatusModal from "./components/StatusModal";
 import Dashboard from "./pages/Dashboard";
 import MapaPostos from "./pages/MapaPostos";
-
-const normalizar = (texto = "") =>
-  texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const formatarUltimaAtualizacao = (iso) => {
   if (!iso) return null;
@@ -49,7 +47,7 @@ export default function App() {
   const [totalPaginas, setTotalPaginas] = useState(0);
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
   const [bandeiraFiltro, setBandeiraFiltro] = useState("");
-  const [postoFiltro, setPostoFiltro] = useState("");
+  const [credenciadoFiltro, setCredenciadoFiltro] = useState("");
   const [aviso, setAviso] = useState(null);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState(null);
 
@@ -57,7 +55,7 @@ export default function App() {
   const [dashTipo, setDashTipo] = useState(1);
   const [dashIBGE, setDashIBGE] = useState(2704302);
 
-  const filtroAtivo = bandeiraFiltro.trim() !== "" || postoFiltro.trim() !== "";
+  const filtroAtivo = bandeiraFiltro.trim() !== "" || credenciadoFiltro.trim() !== "";
 
   const bandeirasDisponiveis = useMemo(() => {
     const set = new Set();
@@ -73,6 +71,7 @@ export default function App() {
       setLoading(true);
       setAviso(null);
       setBandeiraFiltro("");
+      setCredenciadoFiltro("");
       try {
         const diasUsado = diasOverride ?? filtros.dias;
         const res = await api.post("/combustivel", {
@@ -110,11 +109,11 @@ export default function App() {
   }, []);
 
   const dadosFiltrados = dados.filter((item) => {
-    const posto = normalizar(item.estabelecimento.nomeFantasia || item.estabelecimento.razaoSocial);
     const bandeira = item.estabelecimento.bandeira || "";
+    const cred = isCredenciado(item.estabelecimento.cnpj);
     return (
       (!bandeiraFiltro || bandeira === bandeiraFiltro) &&
-      (!postoFiltro || posto.includes(normalizar(postoFiltro)))
+      (!credenciadoFiltro || (credenciadoFiltro === "sim" ? cred : !cred))
     );
   });
 
@@ -147,12 +146,12 @@ export default function App() {
             <FiltrosBar
               filtros={filtros}
               bandeiraFiltro={bandeiraFiltro}
-              postoFiltro={postoFiltro}
+              credenciadoFiltro={credenciadoFiltro}
               bandeirasDisponiveis={bandeirasDisponiveis}
               loading={loading}
               onFiltroChange={handleFiltroChange}
               onBandeiraChange={setBandeiraFiltro}
-              onPostoChange={setPostoFiltro}
+              onCredenciadoChange={setCredenciadoFiltro}
               onBuscar={buscar}
             />
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1, mt: 1 }}>

@@ -10,17 +10,18 @@ const buscarPagina = async ({
   tipoCombustivel,
   dias,
   codigoIBGE,
+  cnpj,
   pagina,
   registrosPorPagina
 }) => {
   const body = {
     produto: { tipoCombustivel },
     dias,
-    estabelecimento: {
-      municipio: { codigoIBGE }
-    },
     pagina,
-    registrosPorPagina
+    registrosPorPagina,
+    estabelecimento: cnpj
+      ? { individual: { cnpj } }
+      : { municipio: { codigoIBGE } }
   };
 
   const response = await axios.post(SEFAZ_URL, body, {

@@ -22,9 +22,9 @@ const TIPOS_COMBUSTIVEL = [1, 2, 3, 4, 5, 6];
 // 🔒 Lock para evitar syncs simultâneos
 let syncEmAndamento = false;
 
-const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, dias = 1 }) => {
+const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, cnpj, dias = 1 }) => {
   const registrosPorPagina = 100;
-  const primeira = await buscarPagina({ tipoCombustivel, dias, codigoIBGE, pagina: 1, registrosPorPagina });
+  const primeira = await buscarPagina({ tipoCombustivel, dias, codigoIBGE, cnpj, pagina: 1, registrosPorPagina });
 
   const conteudo = primeira.conteudo || [];
   const totalPaginas =
@@ -35,12 +35,34 @@ const buscarTodasPaginas = async ({ tipoCombustivel, codigoIBGE, dias = 1 }) => 
   if (totalPaginas > 1) {
     const paginas = Array.from({ length: totalPaginas - 1 }, (_, i) => i + 2);
     const resultados = await Promise.all(
-      paginas.map((p) => buscarPagina({ tipoCombustivel, dias, codigoIBGE, pagina: p, registrosPorPagina }))
+      paginas.map((p) => buscarPagina({ tipoCombustivel, dias, codigoIBGE, cnpj, pagina: p, registrosPorPagina }))
     );
     resultados.forEach((r) => conteudo.push(...(r.conteudo || [])));
   }
 
   return conteudo;
+};
+
+const DIAS_SYNC = 5;
+
+const salvarRegistrosDoCNPJ = async ({ tipoCombustivel, cnpj, dias, fallbackRegistros = [] }) => {
+  const registros = await buscarTodasPaginas({ tipoCombustivel, cnpj, dias });
+  const registrosParaSalvar = registros.length > 0 ? registros : fallbackRegistros;
+
+  if (registrosParaSalvar.length === 0) return 0;
+
+  let salvos = 0;
+  for (const item of registrosParaSalvar) {
+    try {
+      item.estabelecimento.bandeira = null;
+      await salvarRegistro(item, tipoCombustivel);
+      salvos++;
+    } catch (err) {
+      console.error(`   ❌ Erro ao salvar CNPJ ${item?.estabelecimento?.cnpj}:`, err.message);
+    }
+  }
+
+  return salvos;
 };
 
 const sincronizar = async () => {
@@ -64,20 +86,29 @@ const sincronizar = async () => {
 
       for (const tipo of TIPOS_COMBUSTIVEL) {
         try {
-          const registros = await buscarTodasPaginas({ tipoCombustivel: tipo, codigoIBGE, dias: 1 });
+          const registros = await buscarTodasPaginas({ tipoCombustivel: tipo, codigoIBGE, dias: DIAS_SYNC });
 
           if (registros.length === 0) continue;
 
           console.log(`   ⛽ Tipo ${tipo}: ${registros.length} registros encontrados`);
 
-          for (const item of registros) {
+          const cnpjs = [...new Set(
+            registros
+              .map((item) => item?.estabelecimento?.cnpj)
+              .filter(Boolean)
+          )];
+
+          for (const cnpj of cnpjs) {
             try {
-              // ANP bloqueada dentro do Docker — bandeira populada via script de backfill externo
-              item.estabelecimento.bandeira = null;
-              await salvarRegistro(item, tipo);
-              totalSalvos++;
+              const fallbackRegistros = registros.filter((item) => item?.estabelecimento?.cnpj === cnpj);
+              totalSalvos += await salvarRegistrosDoCNPJ({
+                tipoCombustivel: tipo,
+                cnpj,
+                dias: DIAS_SYNC,
+                fallbackRegistros,
+              });
             } catch (err) {
-              console.error(`   ❌ Erro ao salvar CNPJ ${item?.estabelecimento?.cnpj}:`, err.message);
+              console.error(`   ❌ Erro ao atualizar CNPJ ${cnpj}:`, err.message);
               totalErros++;
             }
           }

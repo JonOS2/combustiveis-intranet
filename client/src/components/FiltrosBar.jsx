@@ -3,6 +3,8 @@ import {
   TextField,
   MenuItem,
   Button,
+  Checkbox,
+  ListItemText,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import municipiosAL from "../constants/municipios";
@@ -107,13 +109,19 @@ export default function FiltrosBar({
         label="Filtrar por bandeira"
         size="small"
         value={bandeiraFiltro}
-        onChange={(e) => onBandeiraChange(e.target.value)}
+        onChange={(e) => onBandeiraChange(typeof e.target.value === "string" ? e.target.value.split(",") : e.target.value)}
         disabled={bandeirasDisponiveis.length === 0}
+        slotProps={{
+          select: {
+          multiple: true,
+          renderValue: (selected) => selected.length === 0 ? "Todas as bandeiras" : selected.join(", "),
+          },
+        }}
       >
-        <MenuItem value="">Todas as bandeiras</MenuItem>
         {bandeirasDisponiveis.map((b) => (
           <MenuItem key={b} value={b}>
-            {b}
+            <Checkbox checked={bandeiraFiltro.indexOf(b) > -1} />
+            <ListItemText primary={b} />
           </MenuItem>
         ))}
       </TextField>

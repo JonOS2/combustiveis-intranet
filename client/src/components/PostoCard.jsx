@@ -15,7 +15,7 @@ const formatarMoeda = (valor) =>
   valor != null ? valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
 
 const formatarData = (data) =>
-  data ? new Date(data).toLocaleDateString("pt-BR") : "—";
+  data ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(data)) : "—";
 
 const gerarLinkMaps = (item) => {
   const e = item.estabelecimento.endereco;

@@ -14,7 +14,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import api from "../api/combustivel";
 
-const formatarData = (iso) => {
+const formatarDataHora = (iso) => {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("pt-BR", {
     day: "2-digit",
@@ -23,6 +23,11 @@ const formatarData = (iso) => {
     hour: "2-digit",
     minute: "2-digit",
   });
+};
+
+const formatarData = (iso) => {
+  if (!iso) return "—";
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(iso));
 };
 
 const Linha = ({ label, value }) => (
@@ -87,7 +92,7 @@ export default function StatusModal() {
               <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
                 Sincronização
               </Typography>
-              <Linha label="Última sincronização" value={formatarData(status.ultimaSincronizacao)} />
+              <Linha label="Última sincronização" value={formatarDataHora(status.ultimaSincronizacao)} />
               <Linha label="Dados mais recentes" value={formatarData(status.ultimaDataVenda)} />
 
               <Divider sx={{ my: 1.5 }} />

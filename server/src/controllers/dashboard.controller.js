@@ -1,5 +1,8 @@
 const prisma = require('../database/prisma');
 
+const formatarDataUTC = (data) =>
+  new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', day: '2-digit', month: '2-digit' }).format(new Date(data));
+
 const diasAtras = (n) => {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -30,7 +33,7 @@ const getDashboard = async (req, res) => {
       prisma.preco.findMany({
         where: where(1),
         include: { posto: { include: { municipio: true } }, combustivel: true },
-        orderBy: { dataVenda: 'desc' },
+        orderBy: [{ dataVenda: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }],
       }),
 
       prisma.preco.groupBy({
@@ -135,7 +138,7 @@ const getDashboard = async (req, res) => {
       precosBase = await prisma.preco.findMany({
         where: where(7),
         include: { posto: { include: { municipio: true } }, combustivel: true },
-        orderBy: { dataVenda: 'desc' },
+        orderBy: [{ dataVenda: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }],
       });
     }
 
@@ -209,7 +212,7 @@ const getDashboard = async (req, res) => {
 
     // Formata comparativo — null quando não há dados para aquele tipo naquele dia
     const comparativoFormatado = comparativo30dias.map(d => ({
-      data: new Date(d.dataVenda).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      data: formatarDataUTC(d.dataVenda),
       gasolina: d.gasolina != null ? parseFloat(parseFloat(d.gasolina).toFixed(3)) : null,
       etanol: d.etanol != null ? parseFloat(parseFloat(d.etanol).toFixed(3)) : null,
       diesel: d.diesel != null ? parseFloat(parseFloat(d.diesel).toFixed(3)) : null,
@@ -224,7 +227,7 @@ const getDashboard = async (req, res) => {
       },
       top10,
       historico: precos30dias.map(d => ({
-        data: new Date(d.dataVenda).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        data: formatarDataUTC(d.dataVenda),
         media: parseFloat((d._avg.valorDeclarado || 0).toFixed(3)),
         minimo: parseFloat((d._min.valorDeclarado || 0).toFixed(3)),
         maximo: parseFloat((d._max.valorDeclarado || 0).toFixed(3)),

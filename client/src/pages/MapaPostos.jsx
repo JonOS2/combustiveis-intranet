@@ -119,7 +119,7 @@ export default function MapaPostos({ tipoCombustivel = 1, codigoIBGE = 2704302 }
                         {posto.endereco && <div>{posto.endereco}</div>}
                       </Box>
                       <Box sx={{ color: "text.secondary", fontSize: 11, mt: 0.5 }}>
-                        {new Date(posto.dataVenda).toLocaleDateString("pt-BR")}
+                        {new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(posto.dataVenda))}
                       </Box>
                     </Box>
                   </Popup>

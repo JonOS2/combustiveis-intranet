@@ -54,7 +54,7 @@ model Posto {
 // =========================
 model Combustivel {
   id        Int     @id @default(autoincrement())
-  codigo    String  @unique
+  codigo    String
   descricao String?
   unidade   String?
   tipo      Int? // tipoCombustivel numérico da SEFAZ (1=gasolina, 2=aditivada, etc)
@@ -63,6 +63,8 @@ model Combustivel {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([codigo, tipo])
 }
 
 // =========================
@@ -88,4 +90,25 @@ model Preco {
   @@index([dataVenda])
   @@index([postoId, combustivelId])
   @@index([combustivelId, dataVenda]) // útil para buscas por tipo + período
+}
+
+// =========================
+// INDICADOR BCB
+// =========================
+model IndicadorBCB {
+  id Int @id @default(autoincrement())
+
+  codigo Int @unique
+  nome   String
+
+  valor           Float
+  valorAtualSerie Float
+  valorBaseSerie  Float
+  dataReferencia  DateTime @db.Date
+  validadeAte     DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([validadeAte])
 }

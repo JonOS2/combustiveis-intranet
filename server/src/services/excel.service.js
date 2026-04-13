@@ -1,7 +1,6 @@
 const XLSX = require('xlsx');
 const prisma = require('../database/prisma');
 const {
-  resolverTipoParaSefaz,
   filtrarPorTipo,
   ordenarRegistros
 } = require('./sefaz.service');
@@ -42,11 +41,14 @@ const isCredenciado = (cnpj) => CNPJS_CREDENCIADOS.has(normalizarCNPJ(cnpj));
 
 const MAPA_COMBUSTIVEL = {
   1: 'gasolina-comum', 2: 'gasolina-aditivada', 3: 'etanol',
-  4: 'diesel-comum', 5: 'diesel-s10', 6: 'gnv', 7: 'diesel-s10-aditivado'
+  4: 'diesel-comum', 5: 'diesel-s10', 6: 'gnv', 7: 'aditivado'
 };
 
 const normalizarTexto = (texto = '') =>
   texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').toLowerCase();
+
+const formatarDataUTC = (data) =>
+  new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(data));
 
 const gerarNomeArquivo = ({ registros, tipoCombustivel, ordenarPor, modo, pagina }) => {
   const tipoNome = MAPA_COMBUSTIVEL[tipoCombustivel] || 'combustivel';
@@ -75,7 +77,7 @@ const gerarBufferExcel = (registros) => {
     'Valor Venda (R$)': item.produto.venda.valorVenda,
     Bandeira: item.estabelecimento.bandeira || '—',
     Credenciado: isCredenciado(item.estabelecimento.cnpj) ? 'Sim' : 'Não',
-    Data: new Date(item.produto.venda.dataVenda).toLocaleDateString('pt-BR'),
+    Data: formatarDataUTC(item.produto.venda.dataVenda),
     CNPJ: item.estabelecimento.cnpj,
     Telefone: item.estabelecimento.telefone || '—',
     Endereço: `${item.estabelecimento.endereco.nomeLogradouro || ''}, ${item.estabelecimento.endereco.numeroImovel || ''} — ${item.estabelecimento.endereco.bairro || ''}`.trim(),
@@ -135,8 +137,7 @@ const formatarRegistroDoBanco = (preco) => ({
 const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor }) => {
   const dataLimite = new Date();
   dataLimite.setDate(dataLimite.getDate() - dias);
-
-  const tipoBanco = resolverTipoParaSefaz(tipoCombustivel);
+  const tipoBanco = tipoCombustivel;
 
   const where = {
     dataVenda: { gte: dataLimite },
@@ -147,7 +148,7 @@ const buscarDosBanco = async ({ tipoCombustivel, dias, codigoIBGE, ordenarPor })
   const precosRaw = await prisma.preco.findMany({
     where,
     include: { posto: { include: { municipio: true } }, combustivel: true },
-    orderBy: { dataVenda: 'desc' },
+    orderBy: [{ dataVenda: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }],
   });
 
   const vistos = new Set();

@@ -1,9 +1,13 @@
 const prisma = require('../database/prisma');
+const { ehAditivado } = require('./sefaz.service');
 
 async function salvarRegistro(item, tipoCombustivel) {
   const produto = item.produto;
   const estabelecimento = item.estabelecimento;
   const endereco = estabelecimento.endereco;
+  const tipoNormalizado = (
+    (tipoCombustivel === 5 || tipoCombustivel === 6) && ehAditivado(produto.descricao)
+  ) ? 7 : tipoCombustivel;
 
   // 1️⃣ Município
   const municipio = await prisma.municipio.upsert({
@@ -56,17 +60,22 @@ async function salvarRegistro(item, tipoCombustivel) {
 
   // 3️⃣ Combustível
   const combustivel = await prisma.combustivel.upsert({
-    where: { codigo: produto.codigo },
+    where: {
+      codigo_tipo: {
+        codigo: produto.codigo,
+        tipo: tipoNormalizado,
+      },
+    },
     update: {
       descricao: produto.descricao,
       unidade:   produto.unidadeMedida,
-      ...(tipoCombustivel != null && { tipo: tipoCombustivel }),
+      ...(tipoNormalizado != null && { tipo: tipoNormalizado }),
     },
     create: {
       codigo:    produto.codigo,
       descricao: produto.descricao,
       unidade:   produto.unidadeMedida,
-      tipo:      tipoCombustivel ?? null,
+      tipo:      tipoNormalizado ?? null,
     }
   });
 

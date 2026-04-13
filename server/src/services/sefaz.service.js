@@ -45,11 +45,11 @@ const ehAditivado = (descricao = '') => {
 };
 
 /* =========================
-   RESOLVE TIPO PARA SEFAZ
-   (tipo 7 = S10 aditivado, mas a SEFAZ só conhece o tipo 5)
+  RESOLVE TIPO PARA SEFAZ
+  (o bucket 7 é local; quando precisar consultar a SEFAZ, ele cai no tipo base)
 ========================= */
 const resolverTipoParaSefaz = (tipoCombustivel) => {
-  if (tipoCombustivel === 7) return 5;
+  if (tipoCombustivel === 7) return 6;
   return tipoCombustivel;
 };
 

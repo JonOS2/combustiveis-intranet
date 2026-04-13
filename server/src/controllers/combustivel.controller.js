@@ -1,7 +1,6 @@
 const prisma = require('../database/prisma');
 const {
   buscarPagina,
-  resolverTipoParaSefaz,
   enriquecerComBandeiras,
   filtrarPorTipo,
   ordenarRegistros
@@ -45,12 +44,13 @@ const getCombustiveis = async (req, res) => {
     const { tipoCombustivel = 1, dias = 7, codigoIBGE = 2704302, pagina = 1, registrosPorPagina = 50, ordenarPor = 'declarado' } = req.body;
     const dataLimite = new Date();
     dataLimite.setDate(dataLimite.getDate() - dias);
-    const tipoBanco = resolverTipoParaSefaz(tipoCombustivel);
+    const tipoBanco = tipoCombustivel;
+    const tipoApi = tipoCombustivel === 7 ? 6 : tipoCombustivel;
     const where = { dataVenda: { gte: dataLimite }, combustivel: { tipo: tipoBanco }, posto: { municipio: { codigoIBGE } } };
     const total = await prisma.preco.count({ where });
     if (total === 0) {
       console.warn(`⚠️  Banco vazio para IBGE ${codigoIBGE} tipo ${tipoCombustivel} — usando API SEFAZ`);
-      const data = await buscarPagina({ tipoCombustivel: tipoBanco, dias, codigoIBGE, pagina, registrosPorPagina });
+      const data = await buscarPagina({ tipoCombustivel: tipoApi, dias, codigoIBGE, pagina, registrosPorPagina });
       if (Array.isArray(data?.conteudo)) {
         await enriquecerComBandeiras(data.conteudo);
         data.conteudo = filtrarPorTipo(data.conteudo, tipoCombustivel);
@@ -58,12 +58,16 @@ const getCombustiveis = async (req, res) => {
       }
       return res.json({ ...data, fonte: 'sefaz', ultimaAtualizacao: null });
     }
-    const precosRaw = await prisma.preco.findMany({ where, include: { posto: { include: { municipio: true } }, combustivel: true }, orderBy: { dataVenda: 'desc' } });
+    const precosRaw = await prisma.preco.findMany({
+      where,
+      include: { posto: { include: { municipio: true } }, combustivel: true },
+      orderBy: [{ dataVenda: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }],
+    });
     const ultimaAtualizacao = await prisma.preco.findFirst({ where, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
     const vistos = new Set();
     const precosMaisRecentes = precosRaw.filter((p) => { const c = p.posto.cnpj; if (vistos.has(c)) return false; vistos.add(c); return true; });
     const postoIds = precosMaisRecentes.map(p => p.postoId);
-    const precosAnteriores = await prisma.preco.findMany({ where: { postoId: { in: postoIds }, combustivel: { tipo: tipoBanco }, dataVenda: { lt: dataLimite } }, orderBy: { dataVenda: 'desc' }, select: { postoId: true, valorDeclarado: true } });
+    const precosAnteriores = await prisma.preco.findMany({ where: { postoId: { in: postoIds }, combustivel: { tipo: tipoBanco }, dataVenda: { lt: dataLimite } }, orderBy: [{ dataVenda: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }], select: { postoId: true, valorDeclarado: true } });
     const mapaAnteriores = new Map();
     for (const p of precosAnteriores) { if (!mapaAnteriores.has(p.postoId)) mapaAnteriores.set(p.postoId, p.valorDeclarado); }
     const campo = ordenarPor === 'venda' ? 'valorVenda' : 'valorDeclarado';
@@ -94,7 +98,7 @@ const getMapaPostos = async (req, res) => {
   try {
     const tipoCombustivel = parseInt(req.query.tipoCombustivel) || 1;
     const codigoIBGE = parseInt(req.query.codigoIBGE) || 2704302;
-    const tipoBanco = resolverTipoParaSefaz(tipoCombustivel);
+    const tipoBanco = tipoCombustivel;
     const dataLimite = new Date();
     dataLimite.setDate(dataLimite.getDate() - 7);
 
@@ -106,7 +110,7 @@ const getMapaPostos = async (req, res) => {
         posto: { municipio: { codigoIBGE } },
       },
       include: { posto: { include: { municipio: true } }, combustivel: true },
-      orderBy: { dataVenda: 'desc' },
+      orderBy: [{ dataVenda: 'desc' }, { updatedAt: 'desc' }, { id: 'desc' }],
     });
 
     // Deduplica por CNPJ
@@ -177,15 +181,15 @@ const getHistorico = async (req, res) => {
   try {
     const { cnpj } = req.params;
     const tipoCombustivel = parseInt(req.query.tipoCombustivel) || 1;
-    const tipoBanco = resolverTipoParaSefaz(tipoCombustivel);
+    const tipoBanco = tipoCombustivel;
     const dataLimite = new Date();
     dataLimite.setDate(dataLimite.getDate() - 30);
     const posto = await prisma.posto.findUnique({ where: { cnpj }, select: { id: true, nomeFantasia: true, razaoSocial: true, bairro: true, bandeira: true } });
     if (!posto) return res.status(404).json({ error: 'Posto não encontrado.' });
-    const precos = await prisma.preco.findMany({ where: { postoId: posto.id, combustivel: { tipo: tipoBanco }, dataVenda: { gte: dataLimite } }, orderBy: { dataVenda: 'asc' } });
+    const precos = await prisma.preco.findMany({ where: { postoId: posto.id, combustivel: { tipo: tipoBanco }, dataVenda: { gte: dataLimite } }, orderBy: [{ dataVenda: 'asc' }, { updatedAt: 'asc' }, { id: 'asc' }] });
     const porData = new Map();
     for (const p of [...precos].reverse()) { const data = new Date(p.dataVenda).toISOString().split('T')[0]; if (!porData.has(data)) porData.set(data, p); }
-    const historico = Array.from(porData.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, p]) => ({ data: new Date(p.dataVenda).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), declarado: p.valorDeclarado, venda: p.valorVenda }));
+    const historico = Array.from(porData.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, p]) => ({ data: new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', day: '2-digit', month: '2-digit' }).format(new Date(p.dataVenda)), declarado: p.valorDeclarado, venda: p.valorVenda }));
     res.json({ posto: { nome: posto.nomeFantasia || posto.razaoSocial, bairro: posto.bairro, bandeira: posto.bandeira }, historico });
   } catch (error) {
     console.error('❌ Erro getHistorico:', error.message);

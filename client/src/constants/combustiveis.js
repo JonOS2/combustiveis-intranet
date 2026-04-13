@@ -5,7 +5,7 @@ export const TIPOS_COMBUSTIVEL = [
   { value: 4, label: "Diesel Comum" },
   { value: 5, label: "Diesel S10" },
   { value: 6, label: "GNV" },
-  { value: 7, label: "Diesel S10 Aditivado" },
+  { value: 7, label: "Aditivado" },
 ];
 
 export const OPCOES_DIAS = [

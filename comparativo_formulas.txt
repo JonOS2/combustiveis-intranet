@@ -1,0 +1,12 @@
+Etapa	Script antigo	Fórmula atual	Diferença prática
+Tratamento do crédito livre	0 -> 1; negativo vira absoluto; positivo segue normal	Não há tratamento separado na fórmula da tela; o valor entra direto	O antigo protegia a entrada antes do cálculo; o atual assume valor já válido
+Índice inicial	taxa_periodo = (selic / 100) * (prazo_dias / 100)	indiceAjuste = (selic * creditoLivre) / 100	São fórmulas diferentes; a atual mistura Selic e crédito livre; a antiga usa Selic + prazo
+Período do cálculo	1 / ciclo, com ciclo padrão 0.119	periodo = dias / 252	O antigo usa ciclo fixo em anos; o atual usa dias úteis anualizados
+Capitalização	(1 + taxa_periodo) ** (1 / ciclo)	valorVista * ((1 + indiceAjuste) ** periodo)	O antigo capitaliza um fator isolado; o atual capitaliza em cima do valor à vista
+Ajuste do plano	Não existe	divergencia = taxaParametrizacao - divergenciaBase	O atual considera a base de divergência do plano; o antigo não
+Correção final	preco_fitcard = preco_vista * fator_correcao * desconto_fitcard	coeficienteCorrecao = 1 - abs(divergencia) e depois precoFitcard = valorMaximo * coeficienteCorrecao	O antigo aplica desconto fixo; o atual aplica correção pela divergência do plano
+Preço máximo	preco_maximo = preco_fitcard / desconto_fitcard	valorMaximoFitcard é calculado antes da correção final	No atual, o valor máximo é uma etapa intermediária da parametrização, não o resultado final
+Arredondamento	Só formatação na exibição	Trunca o preço final em 2 casas com truncar(...)	O atual controla melhor o valor apresentado
+Objetivo da fórmula	Calculadora genérica	Regra de parametrização por combustível e município	O atual é mais aderente ao negócio real
+
+Resumo: o script antigo é uma calculadora genérica; a fórmula atual é uma regra de negócio específica, com plano, divergência e período anualizado. Em geral, o código atual está melhor estruturado para o sistema de vocês.

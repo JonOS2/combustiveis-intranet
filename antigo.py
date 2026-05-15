@@ -1,6 +1,6 @@
 selic: float = 14.75
-credito_livre: float = 6.25
-preco_vista: float = 6.89
+credito_livre: float = 6.28
+preco_vista: float = 7.08
 
 
 def tratar_credito_livre (credito_livre: float) -> float:

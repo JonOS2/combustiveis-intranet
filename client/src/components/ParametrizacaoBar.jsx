@@ -10,21 +10,14 @@ import {
 import MUNICIPIOS from "../constants/municipios";
 
 const PLANOS = {
-  gasolina: { titulo: 'Gasolina Comum', combustivelId: 1, divergenciaBase: 0.07 },
-  etanol: { titulo: 'Etanol', combustivelId: 3, divergenciaBase: 0.07 },
+  gasolina: { titulo: 'Gasolina Comum', combustivelId: 1 },
+  etanol: { titulo: 'Etanol', combustivelId: 3 },
   diesel: { titulo: 'Diesel S10', combustivelId: 5, divergenciaBase: 0.0543 },
 };
 
 function formatarPercentual(valor, casas = 2) {
   const numero = Number(valor || 0) * 100;
   return `${numero.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`;
-}
-
-function formatarNumero(valor, casas = 2) {
-  return Number(valor || 0).toLocaleString("pt-BR", {
-    minimumFractionDigits: casas,
-    maximumFractionDigits: casas,
-  });
 }
 
 export default function ParametrizacaoBar({
@@ -59,12 +52,12 @@ export default function ParametrizacaoBar({
           </TextField>
 
           <TextField
-            label="Dias"
+            label="Prazo dias (Python)"
             size="small"
             type="number"
             value={dias}
             onChange={(e) => onDiasChange(Number(e.target.value))}
-            inputProps={{ min: 1, step: 1 }}
+            inputProps={{ min: 0, step: 0.01 }}
             fullWidth
           />
 
@@ -126,7 +119,7 @@ export default function ParametrizacaoBar({
                 <Box sx={{ textAlign: "left", width: "100%" }}>
                   <Typography fontWeight={800}>{plano.titulo}</Typography>
                   <Typography variant="caption" sx={{ opacity: 0.85, display: "block", mt: 0.25 }}>
-                    combustível {plano.combustivelId === 1 ? 'Gasolina' : plano.combustivelId === 3 ? 'Etanol' : 'Diesel'} · base {formatarPercentual(plano.divergenciaBase)}
+                    combustível {plano.combustivelId === 1 ? 'Gasolina' : plano.combustivelId === 3 ? 'Etanol' : 'Diesel'}{plano.divergenciaBase ? ` · base ${formatarPercentual(plano.divergenciaBase)}` : ''}
                   </Typography>
                 </Box>
               </ToggleButton>

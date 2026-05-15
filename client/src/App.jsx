@@ -1,5 +1,5 @@
 import { Routes, Route, NavLink, useLocation } from "react-router-dom";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Box, Container, Typography, Alert,
   Tabs, Tab, Paper, Chip, TextField, MenuItem,
@@ -17,7 +17,6 @@ import MUNICIPIOS from "./constants/municipios";
 import { isCredenciado } from "./constants/credenciados";
 import FiltrosBar from "./components/FiltrosBar";
 import ExportBar from "./components/ExportBar";
-import ParametrizacaoBar from "./components/ParametrizacaoBar";
 import ListaPostos from "./components/ListaPostos";
 import StatusModal from "./components/StatusModal";
 import Dashboard from "./pages/Dashboard";
@@ -58,26 +57,6 @@ export default function App() {
   // ── Estado dashboard ─────────────────────────────────────
   const [dashTipo, setDashTipo] = useState(1);
   const [dashIBGE, setDashIBGE] = useState(2704302);
-
-  // ── Estado parametrização ────────────────────────────────
-  const [paramMunicipio, setParamMunicipio] = useState(2704302);
-  const [paramDias, setParamDias] = useState(30);
-  const [paramSelic, setParamSelic] = useState(14.75);
-  const [paramCreditoLivre, setParamCreditoLivre] = useState(7.31);
-  const [paramPlanoAtivo, setParamPlanoAtivo] = useState("gasolina");
-  const [paramSelicLoading, setParamSelicLoading] = useState(false);
-  const [paramSelicErro, setParamSelicErro] = useState(null);
-  const [paramCreditoLivreLoading, setParamCreditoLivreLoading] = useState(false);
-  const [paramCreditoLivreErro, setParamCreditoLivreErro] = useState(null);
-  const [paramValorVista, setParamValorVista] = useState(0);
-  const [paramValorVistaLoading, setParamValorVistaLoading] = useState(false);
-  const [paramValorVistaErro, setParamValorVistaErro] = useState(null);
-
-  const paramPlanoSelecionado = {
-    gasolina: { combustivelId: 1 },
-    etanol: { combustivelId: 3 },
-    diesel: { combustivelId: 5 },
-  }[paramPlanoAtivo] || { combustivelId: 1 };
 
   const filtroAtivo = bandeiraFiltro.length > 0 || credenciadoFiltro.trim() !== "";
 
@@ -142,72 +121,6 @@ export default function App() {
   });
 
   const textoAtualizacao = formatarUltimaAtualizacao(ultimaAtualizacao);
-
-  useEffect(() => {
-    let ativo = true;
-
-    const carregarIndicadores = async () => {
-      setParamSelicLoading(true);
-      setParamCreditoLivreLoading(true);
-      setParamSelicErro(null);
-      setParamCreditoLivreErro(null);
-
-      try {
-        const [selicRes, creditoRes] = await Promise.all([
-          api.get("/parametrizacao/serie/432?nome=SELIC"),
-          api.get("/parametrizacao/serie/20635?nome=CRÉDITO LIVRE (%)"),
-        ]);
-
-        if (!ativo) return;
-
-        setParamSelic(Number(selicRes.data.valor ?? 0));
-        setParamCreditoLivre(Number(creditoRes.data.valor ?? 0));
-      } catch {
-        if (!ativo) return;
-        setParamSelicErro("Não foi possível carregar a SELIC do BCB.");
-        setParamCreditoLivreErro("Não foi possível carregar o crédito livre do BCB.");
-      } finally {
-        if (ativo) {
-          setParamSelicLoading(false);
-          setParamCreditoLivreLoading(false);
-        }
-      }
-    };
-
-    carregarIndicadores();
-
-    return () => {
-      ativo = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let ativo = true;
-
-    const carregarValorVista = async () => {
-      setParamValorVistaLoading(true);
-      setParamValorVistaErro(null);
-
-      try {
-        const res = await api.get(`/dashboard?tipoCombustivel=${paramPlanoSelecionado.combustivelId}&codigoIBGE=${paramMunicipio}`);
-        if (!ativo) return;
-
-        const mediaAtual = Number(res.data?.metricas?.mediaAtual ?? 0);
-        setParamValorVista(mediaAtual);
-      } catch {
-        if (!ativo) return;
-        setParamValorVistaErro("Não foi possível carregar a média atual do combustível selecionado.");
-      } finally {
-        if (ativo) setParamValorVistaLoading(false);
-      }
-    };
-
-    carregarValorVista();
-
-    return () => {
-      ativo = false;
-    };
-  }, [paramMunicipio, paramPlanoSelecionado.combustivelId]);
 
   return (
     <Container maxWidth="md" sx={{ py: 3 }}>
@@ -284,21 +197,6 @@ export default function App() {
           </Box>
         )}
 
-        {isParametrizacao && (
-          <ParametrizacaoBar
-            municipio={paramMunicipio}
-            dias={paramDias}
-            selic={paramSelic}
-            creditoLivre={paramCreditoLivre}
-            planoAtivo={paramPlanoAtivo}
-            onMunicipioChange={setParamMunicipio}
-            onDiasChange={setParamDias}
-            onSelicChange={setParamSelic}
-            onCreditoLivreChange={setParamCreditoLivre}
-            onPlanoChange={setParamPlanoAtivo}
-          />
-        )}
-
       </Paper>
 
       {/* AVISOS */}
@@ -334,22 +232,7 @@ export default function App() {
         />
         <Route
           path="/parametrizacao"
-          element={
-            <Parametrizacao
-              municipio={paramMunicipio}
-              dias={paramDias}
-              selic={paramSelic}
-              creditoLivre={paramCreditoLivre}
-              planoAtivo={paramPlanoAtivo}
-              valorVista={paramValorVista}
-              selicLoading={paramSelicLoading}
-              selicErro={paramSelicErro}
-              creditoLivreLoading={paramCreditoLivreLoading}
-              creditoLivreErro={paramCreditoLivreErro}
-              valorVistaLoading={paramValorVistaLoading}
-              valorVistaErro={paramValorVistaErro}
-            />
-          }
+          element={<Parametrizacao />}
         />
       </Routes>
     </Container>

@@ -5,6 +5,7 @@ const cors = require('cors');
 const combustivelRoutes = require('./src/routes/combustivel.routes');
 const dashboardRoutes = require('./src/routes/dashboard.routes');
 const parametrizacaoRoutes = require('./src/routes/parametrizacao.routes');
+const telegramRoutes = require('./src/routes/telegram.routes');
 const { iniciarJobs } = require('./src/jobs/sync.job');
 
 if (!process.env.APP_TOKEN) {
@@ -23,6 +24,7 @@ app.use(express.json());
 app.use('/api/combustivel', combustivelRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/parametrizacao', parametrizacaoRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 

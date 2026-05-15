@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { sincronizar } = require('./sync.worker');
+const { enviarTopPostosTelegram } = require('./telegram.job');
 
 /* =========================
    AGENDAMENTO
@@ -27,7 +28,13 @@ const iniciarJobs = () => {
     sincronizar();
   }, { timezone: 'America/Maceio' });
 
-  console.log('✅ [CRON] Jobs agendados: 04:00, 12:00 e 18:00 (America/Maceio)');
+  // 07:00 — resumo diário dos postos mais baratos
+  cron.schedule('0 0 7 * * *', () => {
+    console.log('⏰ [CRON] Disparando resumo Telegram das 07:00');
+    enviarTopPostosTelegram().catch((err) => console.error('❌ Erro Telegram:', err.message));
+  }, { timezone: 'America/Maceio' });
+
+  console.log('✅ [CRON] Jobs agendados: 04:00, 07:00, 12:00 e 18:00 (America/Maceio)');
 };
 
 module.exports = { iniciarJobs };
